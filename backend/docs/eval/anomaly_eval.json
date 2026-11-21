@@ -1,0 +1,160 @@
+{
+  "method_version": "robust_mad_grouped_noisy_or_v2",
+  "evaluated_at": "2026-11-21",
+  "dataset_sha256": {
+    "invoices.csv": "398b86c61710c36240b52c88e2024707d9843e39d8994a93d3e118e9766cc678",
+    "bank_change_history.csv": "6b89a1a55faf6cd4f09cc9f0d0981ff6269a6c24148245c295f70e56aa93563e"
+  },
+  "parameters": {
+    "min_history": 5,
+    "mad_floor": 0.04,
+    "small_bill_weight": 0.35,
+    "identity_weights": {
+      "unverified_bank_change": 0.7,
+      "remit_account_differs_from_master": 0.6,
+      "lookalike_vendor_identity": 0.5,
+      "unknown_supplier": 0.4
+    },
+    "bank_change_lookback_days": 60
+  },
+  "backtest_no_look_ahead": {
+    "invoices": 426,
+    "bands": {
+      "high": 1,
+      "insufficient_history": 251,
+      "low": 173,
+      "medium": 1
+    },
+    "top_10": [
+      {
+        "invoice_id": "AP-00347",
+        "vendor_id": "V009",
+        "invoice_date": "2026-08-31",
+        "amount_cad_minor": 175218,
+        "score": "0.6564",
+        "band": "high",
+        "signals": [
+          "amount_outlier"
+        ]
+      },
+      {
+        "invoice_id": "AP-00392",
+        "vendor_id": "V047",
+        "invoice_date": "2026-09-29",
+        "amount_cad_minor": 593095,
+        "score": "0.3764",
+        "band": "medium",
+        "signals": [
+          "amount_outlier"
+        ]
+      },
+      {
+        "invoice_id": "AP-00339",
+        "vendor_id": "V008",
+        "invoice_date": "2026-08-17",
+        "amount_cad_minor": 400964,
+        "score": "0.2928",
+        "band": "low",
+        "signals": [
+          "amount_outlier"
+        ]
+      },
+      {
+        "invoice_id": "AP-00260",
+        "vendor_id": "V008",
+        "invoice_date": "2026-06-26",
+        "amount_cad_minor": 477074,
+        "score": "0.2696",
+        "band": "low",
+        "signals": [
+          "amount_outlier"
+        ]
+      },
+      {
+        "invoice_id": "AP-00384",
+        "vendor_id": "V008",
+        "invoice_date": "2026-09-22",
+        "amount_cad_minor": 454413,
+        "score": "0.1698",
+        "band": "low",
+        "signals": [
+          "amount_outlier"
+        ]
+      },
+      {
+        "invoice_id": "AP-00187",
+        "vendor_id": "V046",
+        "invoice_date": "2026-05-06",
+        "amount_cad_minor": 246534,
+        "score": "0.1566",
+        "band": "low",
+        "signals": [
+          "amount_outlier"
+        ]
+      },
+      {
+        "invoice_id": "AP-00364",
+        "vendor_id": "V005",
+        "invoice_date": "2026-09-04",
+        "amount_cad_minor": 117687,
+        "score": "0.152",
+        "band": "low",
+        "signals": [
+          "amount_outlier"
+        ]
+      },
+      {
+        "invoice_id": "AP-00213",
+        "vendor_id": "V008",
+        "invoice_date": "2026-05-19",
+        "amount_cad_minor": 581013,
+        "score": "0.1159",
+        "band": "low",
+        "signals": [
+          "amount_outlier"
+        ]
+      },
+      {
+        "invoice_id": "AP-00001",
+        "vendor_id": "V015",
+        "invoice_date": "2026-01-01",
+        "amount_cad_minor": 252000,
+        "score": "0.0",
+        "band": "insufficient_history",
+        "signals": []
+      },
+      {
+        "invoice_id": "AP-00002",
+        "vendor_id": "V036",
+        "invoice_date": "2026-01-01",
+        "amount_cad_minor": 1875800,
+        "score": "0.0",
+        "band": "insufficient_history",
+        "signals": []
+      }
+    ],
+    "bank_change_signals": 0
+  },
+  "injection_experiment": {
+    "seed": 20261121,
+    "eligible_invoices": 175,
+    "sample_size": 175,
+    "false_alarm_rate_unmodified": 0.0114,
+    "false_alarms_unmodified": 2,
+    "catch_rate": {
+      "amount_x2": 0.5029,
+      "amount_x3": 0.5714,
+      "amount_x5": 0.6514,
+      "amount_x0_2_small_bill": 0.5143,
+      "unverified_bank_change": 1.0,
+      "lookalike_and_bank_change_together": 1.0
+    },
+    "definition": "catch = band medium/high on the injected copy; false alarm = band medium/high on the same unmodified sampled invoice (as-of its own date)",
+    "at37_correlated_identity_counted_once": true
+  },
+  "caveats": [
+    "Synthetic dataset and synthetic injections: these are detection rates for planted anomalies, not real-world fraud recall or precision.",
+    "Identity strengths are hand-set and documented; the score is a review priority, not a probability.",
+    "Backtests use only as-of-safe signals (amount history, bank-change dates)."
+  ]
+}

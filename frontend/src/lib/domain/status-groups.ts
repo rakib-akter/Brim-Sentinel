@@ -7,7 +7,7 @@ export const STATUS_GROUPS: Record<InvoiceStatusFilter, InvoiceStatus[] | null> 
   processing: ["processing"],
   approval: ["pending_approval"],
   payment: ["approved", "scheduled", "released", "failed"],
-  done: ["settled", "credit_recorded", "rejected", "non_payable"],
+  done: ["settled", "credit_recorded", "rejected", "cancelled", "non_payable"],
 };
 
 export const STATUS_FILTER_LABELS: Record<InvoiceStatusFilter, string> = {

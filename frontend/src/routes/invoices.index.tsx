@@ -1,15 +1,14 @@
-import { Suspense, useDeferredValue, useEffect, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { Inbox, Languages, Mail, Search, SearchX, Upload } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Inbox, Mail, Search, SearchX, Upload } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+import { QueryState } from "@/components/sentinel/query-state";
 import { EmptyState } from "@/components/sentinel/empty-state";
 import { InvoiceTable } from "@/components/sentinel/invoice-table";
 import { PageHeader } from "@/components/sentinel/page-header";
 import { UploadInvoiceDialog } from "@/components/sentinel/upload-invoice-dialog";
 import { invoicesQuery } from "@/lib/api/queries";
-import { DEFAULT_USER_ID } from "@/lib/domain/roles";
 import { STATUS_FILTERS, STATUS_FILTER_LABELS, inGroup } from "@/lib/domain/status-groups";
 import type { InvoiceStatusFilter } from "@/lib/domain/types";
 import { useSession } from "@/lib/session";
@@ -33,30 +32,40 @@ export const Route = createFileRoute("/invoices/")({
   head: () => ({
     meta: [
       { title: "Invoice Inbox — Brim Sentinel" },
-      { name: "description", content: "Every incoming invoice, credit note and supplier document, with its status and next action." },
+      {
+        name: "description",
+        content:
+          "Every incoming invoice, credit note and supplier document, with its status and next action.",
+      },
       { property: "og:title", content: "Invoice Inbox — Brim Sentinel" },
-      { property: "og:description", content: "Bilingual invoice intake with processing, review and hold states." },
+      {
+        property: "og:description",
+        content: "Bilingual invoice intake with processing, review and hold states.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(invoicesQuery(DEFAULT_USER_ID, {})),
+  loaderDeps: ({ search }) => ({ q: search.q }),
+  loader: async ({ context, deps }) => {
+    await context.queryClient.prefetchQuery(
+      invoicesQuery(context.actor, deps.q ? { q: deps.q } : {}),
+    );
+  },
   component: InboxPage,
 });
 
 function InboxPage() {
-  const { user } = useSession();
+  const { permissions } = useSession();
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Intake"
         title="Invoice Inbox"
-        description="Invoices arrive from the AP mailbox or by upload. Sentinel reads them in English or French, checks them, and flags anything that needs a person."
-        actions={user.role === "auditor" ? null : <UploadInvoiceDialog />}
+        description="Review invoices from the AP mailbox and upload English or French documents."
+        actions={permissions.includes("invoice.upload") ? <UploadInvoiceDialog /> : null}
       />
-      <Suspense fallback={<Skeleton className="h-[520px] rounded-xl" />}>
-        <InboxContent />
-      </Suspense>
+      <InboxContent />
     </div>
   );
 }
@@ -90,35 +99,36 @@ function InboxContent() {
   }, [q, navigate]);
 
   const deferredQ = useDeferredValue(search.q);
-  const all = useSuspenseQuery({
+  const all = useQuery({
     ...invoicesQuery(user.id, deferredQ ? { q: deferredQ } : {}),
     // Poll only while something is being read.
     refetchInterval: (query) =>
       query.state.data?.some((t) => t.invoice.status === "processing") ? 1500 : false,
   });
 
-  const tasks = all.data.filter((t) => inGroup(t.invoice.status, status));
+  const records = all.data ?? [];
+  const tasks = records.filter((t) => inGroup(t.invoice.status, status));
   const counts = Object.fromEntries(
-    STATUS_FILTERS.map((f) => [f, all.data.filter((t) => inGroup(t.invoice.status, f)).length]),
+    STATUS_FILTERS.map((f) => [f, records.filter((t) => inGroup(t.invoice.status, f)).length]),
   ) as Record<InvoiceStatusFilter, number>;
 
-  const fromEmail = all.data.filter((t) => t.invoice.channel === "email").length;
-  const uploaded = all.data.length - fromEmail;
-  const french = all.data.filter((t) => t.invoice.language === "fr").length;
+  const fromEmail = records.filter((t) => t.invoice.channel === "email").length;
+  const uploaded = records.length - fromEmail;
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5">
-          <Mail className="size-3.5" aria-hidden /> <span className="figure font-medium text-foreground">{fromEmail}</span> from AP mailbox
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <Upload className="size-3.5" aria-hidden /> <span className="figure font-medium text-foreground">{uploaded}</span> uploaded
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <Languages className="size-3.5" aria-hidden /> <span className="figure font-medium text-foreground">{french}</span> in French
-        </span>
-      </div>
+      {all.data && (
+        <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <Mail className="size-3.5" aria-hidden />{" "}
+            <span className="figure font-medium text-foreground">{fromEmail}</span> from AP mailbox
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Upload className="size-3.5" aria-hidden />{" "}
+            <span className="figure font-medium text-foreground">{uploaded}</span> uploaded
+          </span>
+        </div>
+      )}
 
       <section className="surface overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 border-b px-3 py-2.5">
@@ -130,22 +140,36 @@ function InboxContent() {
                   key={f}
                   type="button"
                   aria-pressed={active}
-                  onClick={() => void navigate({ search: (s) => ({ ...s, status: f === "all" ? undefined : f }) })}
+                  onClick={() =>
+                    void navigate({
+                      search: (s) => ({ ...s, status: f === "all" ? undefined : f }),
+                    })
+                  }
                   className={cn(
                     "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:shadow-focus",
-                    active ? "bg-primary-soft text-accent-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                    active
+                      ? "bg-primary-soft text-accent-foreground"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground",
                   )}
                 >
                   {STATUS_FILTER_LABELS[f]}
-                  <span className={cn("figure text-xs", active ? "text-accent-foreground/80" : "text-muted-foreground/80")}>
-                    {counts[f]}
+                  <span
+                    className={cn(
+                      "figure text-xs",
+                      active ? "text-accent-foreground/80" : "text-muted-foreground/80",
+                    )}
+                  >
+                    {all.data && counts[f]}
                   </span>
                 </button>
               );
             })}
           </nav>
           <div className="relative w-full sm:w-72">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
             <Input
               aria-label="Search by supplier or invoice number"
               value={q}
@@ -155,10 +179,16 @@ function InboxContent() {
             />
           </div>
         </div>
-        {tasks.length ? (
+        {all.error || all.isPending ? (
+          <QueryState error={all.error} loading="Loading invoices…" retry={all.refetch} />
+        ) : tasks.length ? (
           <InvoiceTable tasks={tasks} caption="Invoice inbox" />
         ) : search.q ? (
-          <EmptyState icon={SearchX} title={`No results for “${search.q}”`} body="Check the spelling or search by invoice number instead." />
+          <EmptyState
+            icon={SearchX}
+            title={`No results for “${search.q}”`}
+            body="Check the spelling or search by invoice number instead."
+          />
         ) : (
           <EmptyState
             icon={Inbox}

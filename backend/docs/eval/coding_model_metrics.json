@@ -1,0 +1,72 @@
+{
+  "model_version": "tfidf_logreg_v1",
+  "evaluated_at": "2026-11-21",
+  "split": {
+    "type": "temporal_holdout",
+    "train": "invoice_date <= 2026-08-31",
+    "test": "invoice_date > 2026-08-31",
+    "train_lines": 636,
+    "test_lines": 146,
+    "train_invoices": 337,
+    "test_invoices": 77,
+    "train_date_range": [
+      "2026-01-01",
+      "2026-08-31"
+    ],
+    "test_date_range": [
+      "2026-09-01",
+      "2026-10-24"
+    ],
+    "excluded": "rejected historical invoices; lines without a GL account",
+    "leakage_controls": [
+      "split by invoice date (no invoice spans both folds)",
+      "TF-IDF/one-hot fitted inside the pipeline on the training fold only",
+      "no target-derived features; vendor default GL comes from vendor master"
+    ]
+  },
+  "classes_in_test": 21,
+  "model": {
+    "accuracy": 1.0,
+    "top3_accuracy": 1.0,
+    "macro_f1": 1.0,
+    "coverage_at_0_70": 1.0,
+    "accuracy_at_0_70": 1.0,
+    "lines_sent_to_review_at_0_70": 0
+  },
+  "text_only_model_all_test_lines": {
+    "accuracy": 1.0,
+    "note": "cold-start proxy: vendor features withheld for every line"
+  },
+  "baselines": {
+    "vendor_default_gl": 0.9795,
+    "vendor_most_frequent_gl_in_train": 0.9795,
+    "rapidfuzz_knn_previous_method": 1.0
+  },
+  "cold_start_leave_one_vendor_out": {
+    "n": 146,
+    "text_only_accuracy": 0.8151,
+    "rapidfuzz_knn_accuracy": 0.6986,
+    "coverage_at_0_70": 0.6849,
+    "accuracy_at_0_70": 1.0,
+    "note": "Each test supplier's lines scored by a text-only model trained without that supplier. In production unseen suppliers are always human-reviewed; this measures suggestion quality."
+  },
+  "subsets": {
+    "unseen_vendor_lines": {
+      "n": 0,
+      "accuracy": null
+    },
+    "novel_description_lines": {
+      "n": 32,
+      "accuracy": 1.0
+    },
+    "novel_description_lines_text_only": {
+      "n": 32,
+      "accuracy": 1.0
+    }
+  },
+  "caveats": [
+    "Synthetic dataset; GL codes are highly predictable from the vendor, so vendor baselines are strong.",
+    "Recurring invoices repeat descriptions across months; see novel_description_lines for unseen text.",
+    "Unseen suppliers are always routed to human review regardless of model confidence."
+  ]
+}

@@ -1,4 +1,14 @@
-import { AlertTriangle, Ban, CheckCircle2, CircleDot, Clock, Loader2, PauseCircle, ScanLine, Send } from "lucide-react";
+import {
+  AlertTriangle,
+  Ban,
+  CheckCircle2,
+  CircleDot,
+  Clock,
+  Loader2,
+  PauseCircle,
+  ScanLine,
+  Send,
+} from "lucide-react";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import type { DocLanguage, InvoiceStatus, RiskBand } from "@/lib/domain/types";
 
@@ -14,6 +24,7 @@ const STATUS: Record<InvoiceStatus, { label: string; variant: Variant; icon: typ
   released: { label: "Released · Simulated", variant: "success", icon: Send },
   settled: { label: "Settled · Simulated", variant: "success", icon: CheckCircle2 },
   failed: { label: "Failed · Simulated", variant: "critical", icon: Ban },
+  cancelled: { label: "Cancelled", variant: "neutral", icon: Ban },
   rejected: { label: "Rejected", variant: "neutral", icon: Ban },
   credit_recorded: { label: "Credit note", variant: "neutral", icon: CircleDot },
   non_payable: { label: "Not payable", variant: "neutral", icon: CircleDot },
@@ -37,25 +48,38 @@ const RISK: Record<RiskBand, { label: string; dot: string; text: string }> = {
 };
 
 /** Review priority — advisory only, never a fraud probability or an approval. */
-export function RiskIndicator({ risk }: { risk: RiskBand }) {
+export function RiskIndicator({ risk }: { risk: RiskBand | null }) {
+  if (!risk) return <span className="text-xs text-muted-foreground">Unrated</span>;
   const r = RISK[risk];
   return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${r.text}`} title="Review priority (advisory)">
+    <span
+      className={`inline-flex items-center gap-1.5 text-xs font-medium ${r.text}`}
+      title="Review priority (advisory)"
+    >
       <span className={`size-2 rounded-full ${r.dot}`} aria-hidden />
       {r.label}
     </span>
   );
 }
 
-export function LanguageBadge({ language, scanned }: { language: DocLanguage; scanned?: boolean }) {
+export function LanguageBadge({
+  language,
+  scanned,
+}: {
+  language: DocLanguage | null;
+  scanned?: boolean;
+}) {
+  if (!language && !scanned) return null;
   return (
     <span className="inline-flex items-center gap-1">
-      <span
-        className="rounded border border-border px-1 py-px font-mono text-[10px] font-semibold uppercase leading-none text-muted-foreground"
-        title={language === "fr" ? "French document" : "English document"}
-      >
-        {language}
-      </span>
+      {language ? (
+        <span
+          className="rounded border border-border px-1 py-px font-mono text-[10px] font-semibold uppercase leading-none text-muted-foreground"
+          title={language === "fr" ? "French document" : "English document"}
+        >
+          {language}
+        </span>
+      ) : null}
       {scanned ? (
         <span title="Scanned image" className="text-muted-foreground">
           <ScanLine className="size-3.5" aria-label="Scanned image" />

@@ -14,7 +14,8 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AppShell } from "@/components/app/app-shell";
 import { Toaster } from "@/components/ui/sonner";
-import { SessionProvider } from "@/lib/session";
+import { identitiesQuery, meQuery } from "@/lib/api/queries";
+import { getDemoActor, SessionProvider } from "@/lib/session";
 
 function NotFoundComponent() {
   return (
@@ -48,9 +49,11 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">This page didn't load</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+          This page didn't load
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. No financial records were changed. You can try again or head back home.
+          Try loading the page again or return home to check the latest records.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
@@ -75,6 +78,14 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  beforeLoad: async ({ context }) => {
+    const actor = getDemoActor();
+    await Promise.all([
+      context.queryClient.prefetchQuery(meQuery(actor)),
+      context.queryClient.prefetchQuery(identitiesQuery()),
+    ]);
+    return { actor };
+  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -82,7 +93,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "Brim Sentinel — AI-assisted accounts payable" },
       {
         name: "description",
-        content: "Detect, resolve, settle and explain accounts payable issues with evidence-linked, human-approved workflows.",
+        content:
+          "Detect, resolve, settle and explain accounts payable issues with evidence-linked, human-approved workflows.",
       },
       { property: "og:title", content: "Brim Sentinel" },
       { property: "og:description", content: "Detect. Resolve. Settle. Explain." },
@@ -121,11 +133,11 @@ function RootShell({ children }: { children: ReactNode }) {
 }
 
 function RootComponent() {
-  const { queryClient } = Route.useRouteContext();
+  const { queryClient, actor } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SessionProvider>
+      <SessionProvider actor={actor}>
         <AppShell>
           {/* Required: nested routes render here. */}
           <Outlet />

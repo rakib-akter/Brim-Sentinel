@@ -1,0 +1,247 @@
+{
+  "evaluated_at": "2026-11-21",
+  "engine": "rapidocr_onnxruntime",
+  "engine_version": "1.4.4",
+  "min_confidence": 0.8,
+  "documents": 54,
+  "variants": [
+    "png_150dpi",
+    "jpeg_q70_150dpi",
+    "pdf_image_rotated_1deg"
+  ],
+  "method": "Text-layer PDFs rasterized to scans; OCR extraction compared with the text-layer extraction of the same file. Synthetic scans of synthetic invoices \u2014 not a real-world accuracy claim.",
+  "summary": {
+    "png_150dpi": {
+      "field_accuracy": 0.9966,
+      "unknown_rate": 0.0034,
+      "wrong_confident_rate": 0.0,
+      "correct": 578,
+      "unknown": 2,
+      "wrong_confident": 0
+    },
+    "jpeg_q70_150dpi": {
+      "field_accuracy": 0.9638,
+      "unknown_rate": 0.0362,
+      "wrong_confident_rate": 0.0,
+      "correct": 559,
+      "unknown": 21,
+      "wrong_confident": 0
+    },
+    "pdf_image_rotated_1deg": {
+      "field_accuracy": 0.969,
+      "unknown_rate": 0.031,
+      "wrong_confident_rate": 0.0,
+      "correct": 562,
+      "unknown": 18,
+      "wrong_confident": 0
+    }
+  },
+  "per_field": {
+    "png_150dpi": {
+      "vendor_tax_id": {
+        "correct": 51,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 3
+      },
+      "invoice_number": {
+        "correct": 54,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "invoice_date": {
+        "correct": 54,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "due_date": {
+        "correct": 52,
+        "unknown": 2,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "currency": {
+        "correct": 54,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "subtotal_minor": {
+        "correct": 54,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "total_minor": {
+        "correct": 54,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "ship_to_province": {
+        "correct": 54,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "remit_account_last4": {
+        "correct": 47,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 7
+      },
+      "tax_amounts": {
+        "correct": 50,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 4
+      },
+      "line_amounts": {
+        "correct": 54,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      }
+    },
+    "jpeg_q70_150dpi": {
+      "vendor_tax_id": {
+        "correct": 51,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 3
+      },
+      "invoice_number": {
+        "correct": 53,
+        "unknown": 1,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "invoice_date": {
+        "correct": 48,
+        "unknown": 6,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "due_date": {
+        "correct": 51,
+        "unknown": 3,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "currency": {
+        "correct": 54,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "subtotal_minor": {
+        "correct": 54,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "total_minor": {
+        "correct": 54,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "ship_to_province": {
+        "correct": 43,
+        "unknown": 11,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "remit_account_last4": {
+        "correct": 47,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 7
+      },
+      "tax_amounts": {
+        "correct": 50,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 4
+      },
+      "line_amounts": {
+        "correct": 54,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      }
+    },
+    "pdf_image_rotated_1deg": {
+      "vendor_tax_id": {
+        "correct": 51,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 3
+      },
+      "invoice_number": {
+        "correct": 54,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "invoice_date": {
+        "correct": 51,
+        "unknown": 3,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "due_date": {
+        "correct": 52,
+        "unknown": 2,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "currency": {
+        "correct": 54,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "subtotal_minor": {
+        "correct": 54,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "total_minor": {
+        "correct": 54,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "ship_to_province": {
+        "correct": 42,
+        "unknown": 12,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      },
+      "remit_account_last4": {
+        "correct": 47,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 7
+      },
+      "tax_amounts": {
+        "correct": 50,
+        "unknown": 0,
+        "wrong_confident": 0,
+        "reference_missing": 4
+      },
+      "line_amounts": {
+        "correct": 53,
+        "unknown": 1,
+        "wrong_confident": 0,
+        "reference_missing": 0
+      }
+    }
+  },
+  "wrong_confident_examples": [],
+  "downstream_safety": "Arithmetic (lines = subtotal, subtotal + tax = total), tax-rate, vendor tax-ID and remit-account checks re-verify OCR values; any mismatch is a hard hold."
+}
