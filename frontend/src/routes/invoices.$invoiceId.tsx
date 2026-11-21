@@ -102,8 +102,25 @@ function InvoiceContent() {
   return (
     <div className="space-y-6">
       <ReviewHeader detail={data} />
+      {record.vendor_id && (
+        <Link
+          className="inline-block text-sm font-medium text-primary hover:underline"
+          to="/vendors"
+          search={{ vendorId: record.vendor_id, q: "", status: "" }}
+        >
+          View supplier profile
+        </Link>
+      )}
       <div className="grid items-start gap-6 lg:grid-cols-5">
         <div className="space-y-6 lg:col-span-3">
+          {record.resolution_cases.length > 0 && (
+            <section id="resolution" className="space-y-3">
+              <h2 className="font-semibold">Resolution cases</h2>
+              {record.resolution_cases.map((item) => (
+                <ResolutionCase key={item.id} id={item.id} />
+              ))}
+            </section>
+          )}
           {data.invoice.findings.map((f) => (
             <div key={f.id ?? f.code} className="space-y-2">
               <FindingCard finding={f} />
@@ -130,14 +147,6 @@ function InvoiceContent() {
             </div>
           ))}
           <DocumentPreview detail={data} />
-          {record.resolution_cases.length > 0 && (
-            <section id="resolution" className="space-y-3">
-              <h2 className="font-semibold">Resolution cases</h2>
-              {record.resolution_cases.map((item) => (
-                <ResolutionCase key={item.id} id={item.id} />
-              ))}
-            </section>
-          )}
           <FlightRecorder invoiceId={invoiceId} />
         </div>
         <div className="space-y-6 lg:col-span-2">

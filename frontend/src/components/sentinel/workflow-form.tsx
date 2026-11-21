@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRef, type ReactNode } from "react";
+import { useId, useRef, useSyncExternalStore, type ComponentProps, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api/http-api";
@@ -7,7 +7,8 @@ import { useSession } from "@/lib/session";
 
 export function errorMessage(error: Error) {
   const reasons = error instanceof ApiError ? error.details["blocked_reasons"] : undefined;
-  return [error.message, ...(Array.isArray(reasons) ? reasons : [])].join(" ");
+  const prefix = error instanceof ApiError && error.status === 403 ? "Permission denied. " : "";
+  return prefix + [error.message, ...(Array.isArray(reasons) ? reasons : [])].join(" ");
 }
 
 export function downloadFile(data: Blob, name: string) {
@@ -19,19 +20,26 @@ export function downloadFile(data: Blob, name: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+const subscribeToHydration = () => () => {};
+const isClientReady = () => true;
+const isServerReady = () => false;
+
 export function WorkflowForm({
   label,
   run,
   children,
   refresh = true,
   success = "Saved.",
+  clearOnSuccess = false,
 }: {
   label: string;
   run: (fields: FormData) => Promise<unknown>;
   children?: ReactNode;
   refresh?: boolean;
   success?: string;
+  clearOnSuccess?: boolean;
 }) {
+  const ready = useSyncExternalStore(subscribeToHydration, isClientReady, isServerReady);
   const cache = useQueryClient();
   const { user } = useSession();
   const refreshRecords = () =>
@@ -40,9 +48,18 @@ export function WorkflowForm({
         queryKey[1] === user.id && queryKey[0] !== "me" && queryKey[0] !== "invoice-document",
     });
   const submitting = useRef(false);
+  const form = useRef<HTMLFormElement>(null);
+  const payload = useRef<FormData | null>(null);
   const mutation = useMutation({
-    mutationFn: run,
+    mutationFn: async () => {
+      const fields = payload.current;
+      payload.current = null;
+      if (!fields) throw new Error("Submit the form again.");
+      return run(fields);
+    },
+    retry: false,
     onSuccess: async () => {
+      if (clearOnSuccess) form.current?.reset();
       if (refresh) await refreshRecords();
     },
     onError: async (error) => {
@@ -54,15 +71,18 @@ export function WorkflowForm({
   });
   return (
     <form
+      ref={form}
+      method="post"
       className="space-y-3"
       onSubmit={(event) => {
         event.preventDefault();
-        if (submitting.current) return;
+        if (!ready || submitting.current) return;
         submitting.current = true;
-        mutation.mutate(new FormData(event.currentTarget));
+        payload.current = new FormData(event.currentTarget);
+        mutation.mutate();
       }}
     >
-      <fieldset disabled={mutation.isPending} className="space-y-3">
+      <fieldset disabled={!ready || mutation.isPending} className="space-y-3">
         {children}
         <Button size="sm" type="submit">
           {mutation.isPending ? "Working…" : label}
@@ -88,17 +108,18 @@ export function Field({
   type = "text",
   required = true,
   defaultValue,
+  ...inputProps
 }: {
   label: string;
   name: string;
   type?: string;
   required?: boolean;
   defaultValue?: string;
-}) {
+} & Pick<ComponentProps<typeof Input>, "inputMode" | "autoComplete">) {
   return (
     <label className="block text-sm">
       {label}
-      <Input className="mt-1" {...{ name, type, required, defaultValue }} />
+      <Input className="mt-1" {...{ name, type, required, defaultValue }} {...inputProps} />
     </label>
   );
 }
@@ -114,10 +135,12 @@ export function Choice({
   options: { value: string; label: string }[];
   required?: boolean;
 }) {
+  const id = useId();
   return (
-    <label className="block text-sm">
-      {label}
+    <div className="text-sm">
+      <label htmlFor={id}>{label}</label>
       <select
+        id={id}
         className="mt-1 block w-full rounded-md border bg-background px-3 py-2"
         name={name}
         required={required}
@@ -129,7 +152,7 @@ export function Choice({
           </option>
         ))}
       </select>
-    </label>
+    </div>
   );
 }
 

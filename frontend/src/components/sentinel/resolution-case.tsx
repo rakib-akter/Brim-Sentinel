@@ -4,6 +4,7 @@ import { api } from "@/lib/api/client";
 import { caseQuery } from "@/lib/api/queries";
 import type { CaseDetail } from "@/lib/api/schema";
 import { useSession } from "@/lib/session";
+import { BankAuthorizationForm, BankVerificationForm } from "./bank-change-forms";
 import { Evidence } from "./flight-recorder";
 import { Choice, errorMessage, Field, humanize, value, WorkflowForm } from "./workflow-form";
 
@@ -38,6 +39,16 @@ export function ResolutionCase({ id }: { id: string }) {
         </p>
       </div>
       {data.wizard && <BankWizard data={data} />}
+      {data.wizard?.current_step === "done" &&
+        data.actions.some(
+          (action) =>
+            action.action_type === "authorization_request" &&
+            action.data["invoice_version"] === data.invoice.version,
+        ) && (
+          <p role="status" className="text-sm text-muted-foreground">
+            Invoice approval request recorded. Required approvers can review it in Approvals.
+          </p>
+        )}
       <details open={!data.wizard} className="text-sm">
         <summary className="cursor-pointer font-medium">Path to Pay</summary>
         <ol className="mt-2 list-decimal space-y-2 pl-5">
@@ -159,11 +170,18 @@ function CaseActionForm({ data }: { data: CaseDetail }) {
   );
 }
 
+const wizardFailures: Record<string, string> = {
+  TRUSTED_CONTACT_MISSING:
+    "No trusted contact predates the request. Ask finance to review the supplier’s contact records.",
+  CALLBACK_DENIED_CHANGE: "The trusted contact denied the change. Escalate the case to finance.",
+  NO_ELIGIBLE_RELEASER:
+    "No eligible independent releaser is available. Escalate to the controller for a documented decision.",
+};
+
 function BankWizard({ data }: { data: CaseDetail }) {
   const { user } = useSession();
   const { bank_change: bank, wizard } = data;
   if (!wizard) return null;
-  const allowed = bank?.allowed_actions ?? [];
   return (
     <div className="space-y-4">
       <div className="rounded-lg border p-3 text-sm">
@@ -181,11 +199,13 @@ function BankWizard({ data }: { data: CaseDetail }) {
             Callback outcome {bank.verification_outcome} · {bank.verification_evidence_ref}
           </p>
         )}
-        {wizard.failure_states.map((state) => (
-          <p key={state} className="text-muted-foreground">
-            {humanize(state)}
-          </p>
-        ))}
+        {wizard.failure_states
+          .filter((state) => state !== "VERIFIED_CARD_ROUTE_UNAVAILABLE")
+          .map((state) => (
+            <p key={state} className="text-muted-foreground">
+              {wizardFailures[state] ?? humanize(state)}
+            </p>
+          ))}
       </div>
       <ol className="grid gap-2 sm:grid-cols-4" aria-label="Bank change steps">
         {wizard.steps.map((step) => (
@@ -199,45 +219,11 @@ function BankWizard({ data }: { data: CaseDetail }) {
           </li>
         ))}
       </ol>
-      {bank && allowed.includes("record_verification") && bank.trusted_contacts.length > 0 && (
-        <WorkflowForm
-          label="Record supplier verification"
-          key={bank.row_version}
-          run={(fields) =>
-            api.verify(user.id, data.id, {
-              expected_row_version: bank.row_version,
-              trusted_contact_id: value(fields, "contact"),
-              method: "phone_callback_to_contact_on_file",
-              occurred_at: new Date(value(fields, "occurred")).toISOString(),
-              outcome: value(fields, "outcome") === "CONFIRMED" ? "CONFIRMED" : "DENIED",
-              notes: value(fields, "notes"),
-              evidence_ref: value(fields, "evidence"),
-            })
-          }
-        >
-          <p className="text-sm">
-            Call a trusted contact already on file and record the actual outcome.
-          </p>
-          <Choice
-            label="Trusted contact"
-            name="contact"
-            options={bank.trusted_contacts.map((contact) => ({
-              value: contact.id,
-              label: `${contact.value} · ${contact.source} · On file since ${contact.established_at}`,
-            }))}
-          />
-          <Field label="Callback time (local time)" name="occurred" type="datetime-local" />
-          <Choice
-            label="Callback outcome"
-            name="outcome"
-            options={[
-              { value: "CONFIRMED", label: "Supplier confirmed the change" },
-              { value: "DENIED", label: "Supplier denied the change" },
-            ]}
-          />
-          <Field label="Call log reference" name="evidence" />
-          <Field label="Verification notes" name="notes" />
-        </WorkflowForm>
+      {bank && (
+        <BankVerificationForm
+          bank={bank}
+          submit={(request) => api.verify(user.id, data.id, request)}
+        />
       )}
       <ul className="space-y-1 text-sm">
         {wizard.route_options.map((route) => (
@@ -251,18 +237,11 @@ function BankWizard({ data }: { data: CaseDetail }) {
           </li>
         ))}
       </ul>
-      {bank && allowed.includes("authorize_route") && (
-        <WorkflowForm
-          label="Authorize verified EFT change"
-          run={(fields) =>
-            api.authorizeRoute(user.id, data.id, {
-              expected_row_version: bank.row_version,
-              notes: value(fields, "notes"),
-            })
-          }
-        >
-          <Field label="Finance authorization rationale" name="notes" />
-        </WorkflowForm>
+      {bank && (
+        <BankAuthorizationForm
+          bank={bank}
+          submit={(request) => api.authorizeRoute(user.id, data.id, request)}
+        />
       )}
     </div>
   );

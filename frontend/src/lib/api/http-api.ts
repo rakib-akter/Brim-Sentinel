@@ -12,6 +12,8 @@ export class ApiError extends Error {
 }
 
 export const invoicePath = (id: string) => `/invoices/${encodeURIComponent(id)}`;
+const vendorPath = (id: string) => `/vendors/${encodeURIComponent(id)}`;
+const bankChangePath = (id: string) => vendorPath("bank-changes") + `/${encodeURIComponent(id)}`;
 export const casePath = (id: string) => `/cases/${encodeURIComponent(id)}`;
 const paymentPath = (id: string) => `/payments/${encodeURIComponent(id)}`;
 
@@ -54,10 +56,14 @@ export function createHttpApi(baseUrl: string) {
     identities: () => get<Schema.DemoIdentitiesOut>("", "/demo-identities"),
     me: (actor: string) => get<Schema.MeOut>(actor, "/me"),
     dashboard: (actor: string) => get<Schema.DashboardOut>(actor, "/dashboard"),
-    async invoices(actor: string, filters: { q?: string; status?: string }) {
+    async invoices(
+      actor: string,
+      filters: { q?: string; status?: string; includeHistory?: boolean },
+    ) {
       const params = new URLSearchParams({ limit: "100" });
       if (filters.q) params.set("q", filters.q);
       if (filters.status && filters.status !== "all") params.set("status", filters.status);
+      if (filters.includeHistory) params.set("include_history", "true");
       const items: Schema.InvoiceSummary[] = [];
       for (;;) {
         params.set("offset", String(items.length));
@@ -66,6 +72,19 @@ export function createHttpApi(baseUrl: string) {
         if (!page.items.length || items.length >= page.total) return items;
       }
     },
+    vendors: (actor: string, q: string, status: string) =>
+      get<Schema.VendorOut[]>(actor, `/vendors?${new URLSearchParams({ q, status })}`),
+    vendor: (actor: string, id: string) => get<Schema.VendorDetail>(actor, vendorPath(id)),
+    onboardVendor: (actor: string, body: Schema.OnboardRequest) =>
+      write<Schema.VendorDetail>(actor, "/vendors", body),
+    activateVendor: (actor: string, id: string, body: Schema.ActivateRequest) =>
+      write<Schema.VendorDetail>(actor, vendorPath(id) + "/activate", body),
+    requestBankChange: (actor: string, id: string, body: Schema.BankChangeCreate) =>
+      write<Schema.BankChangeOut>(actor, vendorPath(id) + "/bank-change-requests", body),
+    verifyBankChange: (actor: string, id: string, body: Schema.VerificationRequest) =>
+      write<Schema.BankChangeOut>(actor, bankChangePath(id) + "/verification", body),
+    authorizeBankChange: (actor: string, id: string, body: Schema.AuthorizeRouteRequest) =>
+      write<Schema.BankChangeOut>(actor, bankChangePath(id) + "/authorize", body),
     invoice: (actor: string, id: string) => get<Schema.InvoiceDetail>(actor, invoicePath(id)),
     document: async (actor: string, id: string) =>
       (await request(actor, invoicePath(id) + "/document")).blob(),

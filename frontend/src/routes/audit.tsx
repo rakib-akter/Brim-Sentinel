@@ -2,11 +2,12 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { PageHeader } from "@/components/sentinel/page-header";
+import { QueryState } from "@/components/sentinel/query-state";
 import { Evidence } from "@/components/sentinel/flight-recorder";
 import {
   downloadFile,
-  errorMessage,
   Field,
+  humanize,
   value,
   WorkflowForm,
 } from "@/components/sentinel/workflow-form";
@@ -51,7 +52,9 @@ function Audit() {
       {permissions.includes("audit.read_all") ? (
         <AuditEvents />
       ) : (
-        <p className="surface p-5 text-sm">Audit Trail access requires an authorized demo role.</p>
+        <p role="alert" className="surface p-5 text-sm">
+          Audit Trail access requires an authorized demo role.
+        </p>
       )}
     </div>
   );
@@ -119,23 +122,21 @@ function AuditEvents() {
         )}
       </section>
       <section className="surface overflow-hidden">
-        {events.error && (
-          <p className="p-5" role="alert">
-            {errorMessage(events.error)}
-          </p>
-        )}
-        {events.isPending && (
-          <p className="p-5" role="status">
-            Loading audit events…
-          </p>
+        {(events.error || events.isPending) && (
+          <QueryState error={events.error} loading="Loading audit events…" retry={events.refetch} />
         )}
         {events.data && (
           <>
+            {events.data.items.length === 0 && (
+              <p className="p-5 text-sm text-muted-foreground">
+                No audit events match these filters.
+              </p>
+            )}
             <ul className="divide-y">
               {events.data.items.map((event) => (
                 <li key={event.id} className="px-5 py-3 text-sm">
                   <p className="font-medium">
-                    {event.action} · {event.result}
+                    {humanize(event.action.replaceAll(".", " · "))} · {humanize(event.result)}
                   </p>
                   <p className="text-muted-foreground">
                     {formatDate(event.occurred_at, { dateStyle: "medium", timeStyle: "short" })} ·{" "}
@@ -157,7 +158,7 @@ function AuditEvents() {
                   <details className="mt-2 text-xs">
                     <summary className="cursor-pointer">Event details</summary>
                     <p className="mt-2">
-                      {event.object_type} {event.object_id}
+                      {event.action} · {event.object_type} {event.object_id}
                       {event.object_version != null && ` · version ${event.object_version}`}
                     </p>
                     {event.before_state && event.after_state && (
