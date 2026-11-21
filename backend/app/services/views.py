@@ -534,6 +534,8 @@ ACTION_LABEL = {
     "finding.dismissed": "Finding dismissed with documented reason",
     "coding.decision": "Coding confirmed or corrected",
     "case.authorization_requested": "Authorization requested (not an approval)",
+    "investigation.model_call": "Sentinel AI read the evidence (model call)",
+    "investigation.completed": "Investigation summary produced (proposals only; nothing executed)",
 }
 
 
@@ -547,6 +549,9 @@ def flight_recorder(ctx: Ctx, inv: Invoice) -> dto.FlightRecorderOut:
     events = []
     for e in s.scalars(q):
         label = ACTION_LABEL.get(e.action, e.action)
+        if e.action == "investigation.lookup":
+            who = "Sentinel AI" if (e.details or {}).get("chosen_by") == "model" else "Sentinel"
+            label = f"{who} looked up {(e.details or {}).get('tool', 'evidence')} (read-only)"
         if e.action in {"invoice.transition", "bank_change.transition"}:
             label = f"{label}: {e.before_state} → {e.after_state}"
         if e.result == "DENIED":

@@ -92,3 +92,47 @@ def test_employee_cannot_investigate(client):
     req = inv(client, "IN-EM-019-1")["requester_id"]
     r = client.post(f"/api/v1/cases/{c['id']}/investigate", headers=H(req))
     assert r.status_code == 403
+
+
+def _scripted_model(monkeypatch, summary, evidence):
+    """Replace the gateway with a scripted model: one extra lookup, then submit_findings."""
+    from app.integrations import ai_gateway
+
+    script = [
+        [{"type": "tool_use", "id": "t1", "name": "find_related_invoices", "input": {"vendor_id": "V004"}}],
+        [{"type": "tool_use", "id": "t2", "name": "submit_findings",
+          "input": {"summary": summary, "evidence": evidence, "proposed_actions": ["trusted_callback"],
+                    "open_questions": ["Has the supplier confirmed by phone?"], "complete": True}}],
+    ]
+
+    def fake(**_kw):
+        return {"content": script.pop(0), "model": "fake-model", "usage": {}, "cached": True, "cost_usd": 0.0,
+                "stop_reason": "tool_use"}
+
+    monkeypatch.setattr(ai_gateway, "create_message", fake)
+
+
+def test_model_investigation_cited_audited_and_hold_untouched(session, monkeypatch):
+    from app.db.models import AuditEvent, User
+
+    case = session.query(ResolutionCase).filter_by(case_type="BANK_CHANGE_UNVERIFIED").first()
+    state_before = case.state
+    _scripted_model(monkeypatch, "Bank change BC-009 on 2026-10-27 is not verified by callback.",
+                    ["get_bank_changes#2", "find_related_invoices#4"])
+    out = investigation.investigate(session, session.get(User, "U004"), case)
+    assert out["source"] == "model" and out["model"] == "fake-model", out["rejected_reason"]
+    assert [x["tool"] for x in out["lookups"]][-1] == "find_related_invoices"
+    looks = session.query(AuditEvent).filter_by(action="investigation.lookup", object_id=case.id).all()
+    assert looks[-1].details["chosen_by"] == "model" and looks[0].details["chosen_by"] == "deterministic"
+    assert session.query(AuditEvent).filter_by(action="investigation.model_call", object_id=case.id).count() == 2
+    assert case.state == state_before  # proposals only; nothing executed
+
+
+def test_model_investigation_with_invented_number_falls_back(session, monkeypatch):
+    from app.db.models import User
+
+    case = session.query(ResolutionCase).filter_by(case_type="BANK_CHANGE_UNVERIFIED").first()
+    _scripted_model(monkeypatch, "The supplier was already paid 45,000.00 this month.", ["get_bank_changes#2"])
+    out = investigation.investigate(session, session.get(User, "U004"), case)
+    assert out["source"] == "deterministic_template" and "45,000.00" in out["rejected_reason"]
+    assert "BC-009" in out["summary"]

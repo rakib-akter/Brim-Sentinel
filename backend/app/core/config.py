@@ -29,6 +29,21 @@ class Settings:
     )
     demo_mode: bool = field(default_factory=lambda: _bool("DEMO_MODE", True))
     ai_enabled: bool = field(default_factory=lambda: _bool("AI_ENABLED", False))
+    # Investigation agent (PRD §5A / v1.4 A3). Model and prices are configurable; prices are only
+    # used for budget enforcement and cost logging — set them to your plan's actual rates.
+    anthropic_api_key: str = field(default_factory=lambda: os.environ.get("ANTHROPIC_API_KEY", ""), repr=False)
+    ai_model: str = field(default_factory=lambda: os.environ.get("AI_MODEL", "claude-sonnet-5-5"))
+    ai_fixture_replay: bool = field(default_factory=lambda: _bool("AI_FIXTURE_REPLAY", True))
+    ai_max_calls_per_case: int = field(default_factory=lambda: int(os.environ.get("AI_MAX_CALLS_PER_CASE", "8")))
+    ai_daily_budget_usd: float = field(default_factory=lambda: float(os.environ.get("AI_DAILY_BUDGET_USD", "5")))
+    ai_case_budget_usd: float = field(default_factory=lambda: float(os.environ.get("AI_CASE_BUDGET_USD", "0.50")))
+    ai_input_usd_per_mtok: float = field(default_factory=lambda: float(os.environ.get("AI_INPUT_USD_PER_MTOK", "3")))
+    ai_output_usd_per_mtok: float = field(default_factory=lambda: float(os.environ.get("AI_OUTPUT_USD_PER_MTOK", "15")))
+    ai_timeout_s: float = field(default_factory=lambda: float(os.environ.get("AI_TIMEOUT_S", "30")))
+    ai_fixtures_dir: Path = field(default_factory=lambda: Path(
+        os.environ.get("AI_FIXTURES_DIR", str(BACKEND_DIR / "fixtures" / "ai"))).resolve())
+    ai_usage_file: Path = field(default_factory=lambda: Path(
+        os.environ.get("AI_USAGE_FILE", str(BACKEND_DIR / ".ai_usage.json"))).resolve())
     frontend_origins: tuple[str, ...] = field(
         default_factory=lambda: tuple(
             o.strip()
