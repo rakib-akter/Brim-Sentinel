@@ -16,7 +16,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/sentinel/empty-state";
 import { InvoiceTable } from "@/components/sentinel/invoice-table";
@@ -26,7 +32,7 @@ import { TaskRow, TaskSection } from "@/components/sentinel/task-list";
 import { UploadInvoiceDialog } from "@/components/sentinel/upload-invoice-dialog";
 import { SimulatedTag } from "@/components/sentinel/badges";
 import { homeQuery, invoicesQuery } from "@/lib/api/queries";
-import { DEFAULT_USER_ID, ROLES } from "@/lib/domain/roles";
+import { ROLES } from "@/lib/domain/roles";
 import { STATUS_FILTERS, STATUS_FILTER_LABELS } from "@/lib/domain/status-groups";
 import type { InvoiceStatusFilter } from "@/lib/domain/types";
 import { formatDate, TODAY } from "@/lib/format";
@@ -36,24 +42,31 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Overview — Brim Sentinel" },
-      { name: "description", content: "What needs your attention, what's ready for approval and which simulated payments are coming up." },
+      {
+        name: "description",
+        content:
+          "What needs your attention, what's ready for approval and which simulated payments are coming up.",
+      },
       { property: "og:title", content: "Overview — Brim Sentinel" },
-      { property: "og:description", content: "Your accounts payable tasks, prioritized with one clear next action each." },
+      {
+        property: "og:description",
+        content: "Your accounts payable tasks, prioritized with one clear next action each.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   loader: async ({ context }) => {
     await Promise.all([
-      context.queryClient.ensureQueryData(homeQuery(DEFAULT_USER_ID)),
-      context.queryClient.ensureQueryData(invoicesQuery(DEFAULT_USER_ID, {})),
+      context.queryClient.ensureQueryData(homeQuery(context.actor)),
+      context.queryClient.ensureQueryData(invoicesQuery(context.actor, {})),
     ]);
   },
   component: OverviewPage,
 });
 
 function OverviewPage() {
-  const { user } = useSession();
+  const { user, permissions } = useSession();
   return (
     <div className="space-y-8">
       <PageHeader
@@ -61,14 +74,14 @@ function OverviewPage() {
         title={`Welcome back, ${user.name.split(" ")[0]}`}
         description={`Here's what needs you today as ${ROLES[user.role].label}. Every item has one clear next step.`}
         actions={
-          user.role === "auditor" ? null : (
+          permissions.includes("invoice.upload") ? (
             <>
               <Button variant="outline" asChild>
                 <Link to="/invoices">Open inbox</Link>
               </Button>
               <UploadInvoiceDialog />
             </>
-          )
+          ) : null
         }
       />
       <Suspense fallback={<OverviewSkeleton />}>
@@ -103,10 +116,41 @@ function OverviewContent() {
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Invoices processed" value={metrics.processed} hint="Read and checked" icon={FileCheck2} />
-        <MetricCard label="Needs review" value={metrics.needsReview} hint="Waiting on a person" icon={ShieldAlert} tone="warning" />
-        <MetricCard label="Payments on hold" value={metrics.onHold} hint="Paused until resolved" icon={PauseCircle} tone="critical" />
-        <MetricCard label="Upcoming payments" value={metrics.upcomingPayments} hint="Simulated" icon={CalendarClock} tone="info" />
+        <Link to="/approvals">
+          <MetricCard
+            label="Ready for approval"
+            value={metrics.readyForApproval}
+            hint="Awaiting a decision"
+            icon={FileCheck2}
+          />
+        </Link>
+        <a href="#intake-items">
+          <MetricCard
+            label="Open intake items"
+            value={metrics.needsReview}
+            hint="Waiting on a person"
+            icon={ShieldAlert}
+            tone="warning"
+          />
+        </a>
+        <Link to="/invoices" search={{ status: "attention" }}>
+          <MetricCard
+            label="Payments on hold"
+            value={metrics.onHold}
+            hint="Paused until resolved"
+            icon={PauseCircle}
+            tone="critical"
+          />
+        </Link>
+        <Link to="/payments">
+          <MetricCard
+            label="Upcoming payments"
+            value={metrics.upcomingPayments}
+            hint="Simulated"
+            icon={CalendarClock}
+            tone="info"
+          />
+        </Link>
       </div>
 
       <div className="grid items-start gap-6 lg:grid-cols-5">
@@ -150,7 +194,7 @@ function OverviewContent() {
         <div className="space-y-6 lg:col-span-2">
           <TaskSection
             title="Ready for approval"
-            description="Invoices waiting for your authorization."
+            description="Invoices waiting for a decision."
             icon={CheckSquare}
             count={data.readyForApproval.length}
           >
@@ -192,12 +236,36 @@ function OverviewContent() {
                 ))}
               </ul>
             ) : (
-              <EmptyState compact icon={Wallet} title="No payments scheduled" body="Approved invoices will queue here." />
+              <EmptyState
+                compact
+                icon={Wallet}
+                title="No payments scheduled"
+                body="Approved invoices will queue here."
+              />
             )}
           </TaskSection>
         </div>
       </div>
 
+      <section id="intake-items" className="surface overflow-hidden">
+        <h2 className="border-b px-5 py-3 font-semibold">Intake work items</h2>
+        {data.workItems.length ? (
+          <ul className="divide-y">
+            {data.workItems.map((item) => (
+              <li key={item.id} className="px-5 py-3 text-sm">
+                <p className="font-medium">{item.subject ?? item.item_type.replaceAll("_", " ")}</p>
+                <p className="text-muted-foreground">
+                  {item.email_id} · {item.status} · {item.note}
+                </p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="px-5 py-3 text-sm text-muted-foreground">
+            No intake work items in this view.
+          </p>
+        )}
+      </section>
       <AllInvoices />
     </>
   );
@@ -220,7 +288,10 @@ function AllInvoices() {
           <p className="text-xs text-muted-foreground">Search and filter everything you can see.</p>
         </div>
         <div className="relative w-full sm:w-64">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
           <Input
             aria-label="Search invoices"
             value={q}
@@ -245,7 +316,12 @@ function AllInvoices() {
       {data.length ? (
         <InvoiceTable tasks={data} caption="All invoices" />
       ) : (
-        <EmptyState compact icon={SearchX} title="No invoices match" body="Try a different supplier name, invoice number or status." />
+        <EmptyState
+          compact
+          icon={SearchX}
+          title="No invoices match"
+          body="Try a different supplier name, invoice number or status."
+        />
       )}
     </section>
   );

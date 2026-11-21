@@ -24,7 +24,9 @@ const RESOLVER_ROLES = new Set(["ap_clerk", "finance_manager", "controller", "cf
 /** Total converted to CAD minor units using the stored invoice-date FX rate. */
 export function amountCadMinor(inv: Invoice): number | null {
   if (inv.totalMinor === null) return null;
-  return inv.currency === "USD" ? Math.round(inv.totalMinor * (inv.fxToCad ?? 1)) : inv.totalMinor;
+  return inv.currency === "USD"
+    ? Math.round(inv.totalMinor * Number(inv.fxToCad ?? 1))
+    : inv.totalMinor;
 }
 
 export function currentStep(inv: Invoice) {
@@ -84,6 +86,8 @@ export function plainStatus(inv: Invoice): string {
       return "Simulated payment failed — needs a retry decision";
     case "credit_recorded":
       return "Credit recorded — reduces what we owe";
+    case "cancelled":
+      return "Cancelled";
     case "rejected":
       return "Rejected";
     case "non_payable":
@@ -109,7 +113,8 @@ export function ownerFor(inv: Invoice): string {
 }
 
 export function primaryActionFor(inv: Invoice, user: User): PrimaryAction {
-  if (user.role === "auditor") return { kind: "view_record", label: "View record", emphasis: "quiet" };
+  if (user.role === "auditor")
+    return { kind: "view_record", label: "View record", emphasis: "quiet" };
   const canResolve = RESOLVER_ROLES.has(user.role);
   switch (inv.status) {
     case "processing":
@@ -154,7 +159,12 @@ export function scopeFor(invoices: Invoice[], user: User): Invoice[] {
 }
 
 export function toTask(inv: Invoice, user: User): InvoiceTask {
-  return { invoice: inv, plainStatus: plainStatus(inv), owner: ownerFor(inv), action: primaryActionFor(inv, user) };
+  return {
+    invoice: inv,
+    plainStatus: plainStatus(inv),
+    owner: ownerFor(inv),
+    action: primaryActionFor(inv, user),
+  };
 }
 
 const RISK_ORDER = { high: 0, medium: 1, low: 2 } as const;
@@ -170,7 +180,11 @@ export function buildHomeSummary(all: Invoice[], user: User): HomeSummary {
           .sort((a, b) => {
             const blockA = a.findings.some((f) => f.blocking) ? 0 : 1;
             const blockB = b.findings.some((f) => f.blocking) ? 0 : 1;
-            return blockA - blockB || RISK_ORDER[a.risk] - RISK_ORDER[b.risk] || byDue(a, b);
+            return (
+              blockA - blockB ||
+              (a.risk ? RISK_ORDER[a.risk] : 3) - (b.risk ? RISK_ORDER[b.risk] : 3) ||
+              byDue(a, b)
+            );
           });
   const approvals = all.filter((i) => isAwaitingUser(i, user)).sort(byDue);
   const upcoming = visible
@@ -192,11 +206,13 @@ export function buildHomeSummary(all: Invoice[], user: User): HomeSummary {
 
 export function filterInvoices(invoices: Invoice[], params: InvoiceListParams): Invoice[] {
   const q = params.q?.trim().toLowerCase();
-    return invoices
+  return invoices
     .filter((i) => inGroup(i.status, params.status ?? "all"))
     .filter((i) =>
       q
-        ? [i.supplierName, i.number ?? "", i.id, i.sourceRef].some((v) => v.toLowerCase().includes(q))
+        ? [i.supplierName, i.number ?? "", i.id, i.sourceRef].some((v) =>
+            v.toLowerCase().includes(q),
+          )
         : true,
     )
     .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
@@ -208,7 +224,11 @@ export function filterInvoices(invoices: Invoice[], params: InvoiceListParams): 
  */
 export function checksFor(inv: Invoice): ValidationCheck[] {
   const has = (code: string) => inv.findings.find((f) => f.code === code);
-  const r = (name: string, result: ValidationCheck["result"], note: string): ValidationCheck => ({ name, result, note });
+  const r = (name: string, result: ValidationCheck["result"], note: string): ValidationCheck => ({
+    name,
+    result,
+    note,
+  });
   const unread = inv.totalMinor === null;
   const unknownVendor = has("UNKNOWN_VENDOR") || inv.supplierId === "PENDING";
   return [
@@ -230,7 +250,11 @@ export function checksFor(inv: Invoice): ValidationCheck[] {
     unread
       ? r("Taxes", "UNKNOWN", "Not extracted")
       : inv.taxes.length === 0
-        ? r("Taxes", "NOT_APPLICABLE", inv.currency === "USD" ? "Foreign supplier — no Canadian tax charged" : "No tax lines")
+        ? r(
+            "Taxes",
+            "NOT_APPLICABLE",
+            inv.currency === "USD" ? "Foreign supplier — no Canadian tax charged" : "No tax lines",
+          )
         : r("Taxes", "PASS", inv.taxes.map((t) => t.label).join(" + ")),
     inv.poNumber
       ? r("Purchase order", "PASS", `${inv.poNumber} has enough remaining balance`)

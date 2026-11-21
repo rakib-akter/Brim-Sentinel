@@ -95,7 +95,7 @@ function NavList({ items, counts }: { items: NavItem[]; counts: Record<string, n
 }
 
 export function AppSidebar() {
-  const { user } = useSession();
+  const { user, permissions } = useSession();
   const { data } = useQuery(homeQuery(user.id));
   // Counts appear after hydration so server and browser render the same markup.
   const [mounted, setMounted] = useState(false);
@@ -112,8 +112,12 @@ export function AppSidebar() {
         <Link to="/" className="flex items-center gap-2.5 rounded-lg px-1 py-1">
           <BrandMark className="size-8 shrink-0" />
           <div className="min-w-0 leading-tight group-data-[collapsible=icon]:hidden">
-            <p className="text-[15px] font-semibold tracking-tight text-foreground">Brim Sentinel</p>
-            <p className="truncate text-[11px] text-muted-foreground">Harborline Logistics · Demo</p>
+            <p className="text-[15px] font-semibold tracking-tight text-foreground">
+              Brim Sentinel
+            </p>
+            <p className="truncate text-[11px] text-muted-foreground">
+              Harborline Logistics · Demo
+            </p>
           </div>
         </Link>
       </SidebarHeader>
@@ -127,7 +131,12 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel className="eyebrow">Oversight</SidebarGroupLabel>
           <SidebarGroupContent>
-            <NavList items={OVERSIGHT} counts={counts} />
+            <NavList
+              items={OVERSIGHT.filter(
+                (item) => item.to !== "/audit" || permissions.includes("audit.read_all"),
+              )}
+              counts={counts}
+            />
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
