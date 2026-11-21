@@ -142,7 +142,7 @@ def create_from_document(session: Session, *, invoice_id: str, document_id: str,
         department_source=dept_src, requester_id=req_id, requester_source=req_src, language=ex.language,
         uncertain_fields=sorted(set(ex.uncertain_fields)),
         evidence={"fields": ex.evidence, "injection_phrases": ex.injection_phrases, "credit_ref": ex.credit_ref,
-                  "document_id": doc.id, "extraction_status": ex.status})
+                  "document_id": doc.id, "extraction_status": ex.status, "ocr": ex.ocr or None})
     session.add(v)
     for ln in ex.lines:
         session.add(InvoiceLine(invoice_id=inv.id, version=1, line_no=ln.line_no, description=ln.description,
@@ -155,7 +155,10 @@ def create_from_document(session: Session, *, invoice_id: str, document_id: str,
     session.flush()
     audit.record(session, actor=actor, action="invoice.extracted", object_type="invoice", object_id=inv.id,
                  object_version=1, details={"provenance": ex.provenance, "status": ex.status,
-                                            "uncertain_fields": v.uncertain_fields, "vendor_match": match},
+                                            "uncertain_fields": v.uncertain_fields, "vendor_match": match,
+                                            "ocr": {k: ex.ocr.get(k) for k in ("status", "engine", "engine_version",
+                                                                                "mean_confidence", "message")
+                                                    if ex.ocr.get(k) is not None} or None},
                  evidence=[{"type": "document", "ref": doc.id}])
     process(session, inv, actor=actor, reason="initial intake")
     return inv
@@ -248,8 +251,8 @@ def process(session: Session, inv: Invoice, *, actor: User | None, reason: str) 
 
     if "document" in (v.uncertain_fields or []):
         results = [Result("extraction", "EXTRACTION_INCOMPLETE", "UNKNOWN", True,
-                          "No readable text layer, no OCR engine available and no labelled fixture. "
-                          "Manual entry required; nothing was guessed.", "high")]
+                          "No readable text layer and OCR produced no usable text (or is unavailable) and no "
+                          "labelled fixture exists. Manual entry required; nothing was guessed.", "high")]
         findings = _persist(session, inv, v, results, [])
         if inv.lifecycle_state != lc.ON_HOLD:
             lc.transition(session, inv, lc.ON_HOLD, actor=actor, reason="extraction failed")

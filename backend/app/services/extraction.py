@@ -1,8 +1,9 @@
 """ExtractionService: text-first extraction with explicit provenance.
 
-Pipeline: PyMuPDF text layer → (OCR not installed in this environment) → labelled demo fixture
-transcription if one exists → otherwise NEEDS_MANUAL_EXTRACTION. Fixture output is labelled
-`demo_fixture`, never `ocr`. Unreadable or ambiguous values are returned as None and listed in
+Pipeline: PyMuPDF text layer (`pdf_text`) → local OCR for scans and image-only PDFs (`ocr`,
+see `services/ocr.py`) → labelled demo fixture transcription only if OCR is unavailable
+(`demo_fixture`) → otherwise NEEDS_MANUAL_EXTRACTION. Fixture output is never labelled `ocr`.
+Unreadable, ambiguous or low-confidence values are returned as None and listed in
 `uncertain_fields`; nothing is guessed."""
 from __future__ import annotations
 
@@ -15,12 +16,16 @@ from typing import Any
 
 from app.core.config import get_settings
 from app.core.money import parse_money, to_minor
+from app.services import ocr as ocr_svc
 
 PROVINCES = "AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT"
 _PROV_RE = re.compile(rf"\b({PROVINCES})\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d\b")
-_REMIT_RE = re.compile(r"Inst\.?\s*(\d{3})\s+Transit\s+(\d{5})\s+Acct\s+(\d{5,12})", re.I)
-_TAXID_RE = re.compile(r"(?:GST/HST|TPS/TVH)\s+(\d{9}RT\d{4})")
-_QSTID_RE = re.compile(r"(?:QST|TVQ)\s+(\d{10}TQ\d{4})")
+# OCR drops spaces ("MontrealQCH3B4W8"): accept a province + postal code at the end of the line.
+_PROV_OCR_RE = re.compile(rf"({PROVINCES})\s*[A-Z]\d[A-Z]\s?\d[A-Z]\d\s*$")
+_REMIT_RE = re.compile(r"Inst\.?\s*(\d{3})\s*Transit\s*(\d{5})\s*Acct\s*(\d{5,12})\b", re.I)
+_TAXID_RE = re.compile(r"(?:GST/HST|TPS/TVH)\s*(\d{9}RT\d{4})")
+_QSTID_RE = re.compile(r"(?:QST|TVQ)\s*(\d{10}TQ\d{4})")
+MIN_TEXT_LAYER_CHARS = 20
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _INJECTION_RE = re.compile(
     r"(ignore (all|any|previous|prior) instructions|approve this invoice|mark (this|as) (paid|verified|approved)|"
@@ -37,8 +42,21 @@ FIELD_LABELS: dict[str, list[str]] = {
 }
 SUBTOTAL_LABELS = {"subtotal", "sous-total", "sous total"}
 LINE_HEADER_END = {"amount", "montant"}
+
 DOC_TYPES = {"INVOICE": "invoice", "TAX INVOICE": "invoice", "FACTURE": "invoice",
              "CREDIT NOTE": "credit_note", "NOTE DE CRÉDIT": "credit_note", "NOTE DE CREDIT": "credit_note"}
+LINE_HEADER_WORDS = {"description", "qty", "quantity", "qté", "unit price", "unitprice", "prix unitaire",
+                     "prixunitaire"}
+BILL_TO_LABELS = {"bill to", "billto", "facturer à", "facturerà", "facturer a", "facturera"}
+
+
+def _compact(s: str) -> str:
+    return re.sub(r"\s+", "", s).lower()
+
+
+_LABEL_INDEX = {_compact(lbl): fname for fname, labels in FIELD_LABELS.items() for lbl in labels}
+_DOC_TYPES_COMPACT = {_compact(k): v for k, v in DOC_TYPES.items()}
+_SUBTOTAL_COMPACT = {_compact(x) for x in SUBTOTAL_LABELS}
 
 
 @dataclass
@@ -77,6 +95,7 @@ class Extraction:
     evidence: dict[str, str] = field(default_factory=dict)
     injection_phrases: list[str] = field(default_factory=list)
     raw_text: str = ""
+    ocr: dict[str, Any] = field(default_factory=dict)
 
 
 def read_text_layer(path: Path) -> str:
@@ -119,29 +138,49 @@ def _money(raw: str, extraction: Extraction, name: str) -> int | None:
     return to_minor(d)
 
 
-def parse_text(text: str, provenance: str) -> Extraction:
+def parse_text(text: str, provenance: str, line_conf: dict[str, float] | None = None,
+               min_conf: float | None = None) -> Extraction:
+    """Parse a text layer / OCR reading. `line_conf` maps a line to its recognition confidence;
+    values read from a line below `min_conf` are left blank and listed as uncertain."""
     ex = Extraction(provenance=provenance, status="EXTRACTED", raw_text=text)
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    threshold = min_conf if min_conf is not None else 0.0
+
+    def ok(*cells: str) -> bool:
+        return line_conf is None or all(line_conf.get(c.strip(), 1.0) >= threshold for c in cells)
+
+    def low(name: str) -> None:
+        ex.uncertain_fields.append(name)
+
     if len(lines) < 5:
         ex.status = "NEEDS_MANUAL_EXTRACTION"
         ex.uncertain_fields.append("document")
         return ex
 
     ex.injection_phrases = sorted({m.group(0) for m in _INJECTION_RE.finditer(text)})
-    ex.vendor_name = lines[0]
+    if ok(lines[0]):
+        ex.vendor_name = lines[0]
+    else:
+        low("vendor_name")
     ex.evidence["vendor_name"] = lines[0]
     lower_text = text.lower()
     ex.language = "fr" if any(k in lower_text for k in ("facture", "sous-total", "échéance", "montant")) else "en"
 
-    bill_idx = next((i for i, ln in enumerate(lines) if ln.lower() in {"bill to", "facturer à", "facturer a"}), None)
+    bill_idx = next((i for i, ln in enumerate(lines) if _compact(ln) in BILL_TO_LABELS), None)
     header_zone = lines[: bill_idx if bill_idx is not None else 12]
     for ln in header_zone:
         if m := _TAXID_RE.search(ln):
-            ex.vendor_tax_id = m.group(1)
+            if ok(ln):
+                ex.vendor_tax_id = m.group(1)
+            else:
+                low("vendor_tax_id")
         if m := _QSTID_RE.search(ln):
-            ex.vendor_qst_id = m.group(1)
-        if ln.upper() in DOC_TYPES and ex.document_type is None:
-            ex.document_type = DOC_TYPES[ln.upper()]
+            if ok(ln):
+                ex.vendor_qst_id = m.group(1)
+            else:
+                low("vendor_qst_id")
+        if _compact(ln) in _DOC_TYPES_COMPACT and ex.document_type is None:
+            ex.document_type = _DOC_TYPES_COMPACT[_compact(ln)]
             ex.evidence["document_type"] = ln
         if ln == "Invoice" and ex.document_type is None:
             ex.document_type = "invoice"
@@ -151,11 +190,14 @@ def parse_text(text: str, provenance: str) -> Extraction:
         if ":" not in ln:
             continue
         label, _, value = ln.partition(":")
-        nl = _norm_label(label)
-        for fname, labels in FIELD_LABELS.items():
-            if nl in labels and fname not in ex.evidence:
+        fname_hit = _LABEL_INDEX.get(_compact(_norm_label(label)))
+        for fname, _labels in FIELD_LABELS.items():
+            if fname == fname_hit and fname not in ex.evidence:
                 ex.evidence[fname] = ln
                 v = value.strip()
+                if not ok(ln):
+                    low(fname)
+                    break
                 if fname == "invoice_number":
                     ex.invoice_number = v or None
                 elif fname == "invoice_date":
@@ -170,10 +212,12 @@ def parse_text(text: str, provenance: str) -> Extraction:
                     ex.credit_ref = v or None
                 break
 
-    if bill_idx is not None and bill_idx + 2 < len(lines):
+    if bill_idx is not None and bill_idx + 2 < len(lines) and ok(lines[bill_idx + 2]):
         ex.bill_to = lines[bill_idx + 2]
         ex.evidence["bill_to"] = f"{lines[bill_idx + 1]} — {lines[bill_idx + 2]}"
         if m := _PROV_RE.search(lines[bill_idx + 2]):
+            ex.ship_to_province = m.group(1)
+        elif provenance == "ocr" and (m := _PROV_OCR_RE.search(lines[bill_idx + 2])):
             ex.ship_to_province = m.group(1)
     if ex.ship_to_province is None:
         ex.uncertain_fields.append("ship_to_province")
@@ -181,50 +225,69 @@ def parse_text(text: str, provenance: str) -> Extraction:
     # Line items: 4-line groups between the 'Amount' header and the subtotal label.
     try:
         start = next(i for i, ln in enumerate(lines) if ln.lower() in LINE_HEADER_END) + 1
-        end = next(i for i in range(start, len(lines)) if lines[i].lower() in SUBTOTAL_LABELS)
+        end = next(i for i in range(start, len(lines)) if _compact(lines[i]) in _SUBTOTAL_COMPACT)
     except StopIteration:
         start = end = None
     if start is None or end is None:
         ex.uncertain_fields.append("lines")
     else:
+        # OCR may order a header cell after 'Amount' when the header row is slightly skewed.
+        while start < end and lines[start].lower() in LINE_HEADER_WORDS:
+            start += 1
         block = lines[start:end]
         if len(block) % 4 != 0:
             ex.uncertain_fields.append("lines")
         for n, i in enumerate(range(0, len(block) - len(block) % 4, 4), start=1):
             desc, qty, unit, amt = block[i : i + 4]
+            if not ok(desc):
+                low(f"lines[{n}].description")
+            if not ok(qty, unit, amt):
+                low("lines")  # a numeric cell could not be read reliably → whole table UNKNOWN
             ex.lines.append(ExtractedLine(
                 line_no=n, description=desc, quantity=qty.replace(",", "."),
-                unit_price_minor=_money(unit, ex, f"lines[{n}].unit_price"),
-                amount_minor=_money(amt, ex, f"lines[{n}].amount"),
+                unit_price_minor=_money(unit, ex, f"lines[{n}].unit_price") if ok(unit) else None,
+                amount_minor=_money(amt, ex, f"lines[{n}].amount") if ok(amt) else None,
             ))
         # Subtotal, taxes, total: (label, amount) pairs.
         j = end
         while j + 1 < len(lines):
             label, val = lines[j], lines[j + 1]
             ll = label.lower()
-            if ll in SUBTOTAL_LABELS:
-                ex.subtotal_minor = _money(val, ex, "subtotal")
+            readable = ok(label, val)
+            if _compact(label) in _SUBTOTAL_COMPACT:
+                ex.subtotal_minor = _money(val, ex, "subtotal") if readable else None
+                if not readable:
+                    low("subtotal")
                 ex.evidence["subtotal"] = f"{label} {val}"
             elif ll.startswith("total"):
                 cur = label.split()[-1].upper()
-                ex.currency = cur if cur in {"CAD", "USD"} else None
+                cur = cur[-3:] if provenance == "ocr" and cur.startswith("TOTAL") else cur  # "TOTALCAD"
+                ex.currency = cur if cur in {"CAD", "USD"} and ok(label) else None
                 if ex.currency is None:
                     ex.uncertain_fields.append("currency")
-                ex.total_minor = _money(val, ex, "total")
+                ex.total_minor = _money(val, ex, "total") if ok(val) else None
+                if not ok(val):
+                    low("total")
                 ex.evidence["total"] = f"{label} {val}"
                 break
             else:
                 rate = re.search(r"\(([\d.,]+)\s*%\)", label)
                 kind = label.split("(")[0].strip().upper()
                 kind = {"TPS": "GST", "TVQ": "QST", "TVH": "HST"}.get(kind, kind)
+                if not readable:
+                    low(f"tax[{label}]")
                 ex.taxes.append({
                     "label": label, "kind": kind,
-                    "rate_pct": rate.group(1).replace(",", ".") if rate else None,
-                    "amount_minor": _money(val, ex, f"tax[{label}]"),
+                    "rate_pct": rate.group(1).replace(",", ".") if rate and readable else None,
+                    "amount_minor": _money(val, ex, f"tax[{label}]") if readable else None,
                 })
             j += 2
 
-    if m := _REMIT_RE.search(text):
+    remit_m = _REMIT_RE.search(text)
+    remit_line = next((ln for ln in lines if remit_m and remit_m.group(0) in ln), None)
+    if remit_m and remit_line is not None and not ok(remit_line):
+        ex.uncertain_fields.append("remit")  # bank digits must never come from a weak reading
+    elif m := remit_m:
         ex.remit = {"method": "EFT", "institution": m.group(1), "transit": m.group(2),
                     "account_last4": m.group(3)[-4:], "account_full": m.group(3)}
         ex.evidence["remit"] = m.group(0).replace(m.group(3), "****" + m.group(3)[-4:])
@@ -244,13 +307,25 @@ def parse_text(text: str, provenance: str) -> Extraction:
 
 def extract_document(path: Path, filename: str) -> Extraction:
     text = read_text_layer(path)
-    if text.strip():
+    if len(text.strip()) >= MIN_TEXT_LAYER_CHARS:
         return parse_text(text, "pdf_text")
+    ocr_meta: dict[str, Any] = {}
+    if path.suffix.lower() in {".pdf", *ocr_svc.IMAGE_SUFFIXES}:
+        res = ocr_svc.run(path)
+        ocr_meta = {"status": res.status, "message": res.message}
+        if res.status == "OK":
+            ex = parse_text("\n".join(res.lines), "ocr", line_conf=res.confidence_map(),
+                            min_conf=get_settings().ocr_min_confidence)
+            ex.ocr = {**ocr_meta, **res.provenance()}
+            return ex
     fx = fixture_text(filename)
     if fx:
-        return parse_text(fx, "demo_fixture")
+        ex = parse_text(fx, "demo_fixture")
+        ex.ocr = ocr_meta
+        return ex
     ex = Extraction(provenance="none", status="NEEDS_MANUAL_EXTRACTION")
     ex.uncertain_fields = ["document"]
+    ex.ocr = ocr_meta
     return ex
 
 

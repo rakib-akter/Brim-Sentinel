@@ -46,6 +46,11 @@ class Settings:
     )
     fixtures_dir: Path = BACKEND_DIR / "fixtures"
     max_upload_bytes: int = 10 * 1024 * 1024
+    # Local OCR (RapidOCR/ONNX). Tokens below the confidence threshold leave the field UNKNOWN.
+    ocr_enabled: bool = field(default_factory=lambda: _bool("OCR_ENABLED", True))
+    ocr_min_confidence: float = field(default_factory=lambda: float(os.environ.get("OCR_MIN_CONFIDENCE", "0.80")))
+    # Per-actor limit on mutating requests (POST/PATCH) per rolling minute; 0 disables.
+    rate_limit_per_minute: int = field(default_factory=lambda: int(os.environ.get("RATE_LIMIT_PER_MINUTE", "120")))
 
 
 _settings: Settings | None = None
