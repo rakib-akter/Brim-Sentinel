@@ -84,6 +84,8 @@ def new_version(session: Session, inv: Invoice, actor: User, *, reason: str, cha
     inv.row_version += 1
     session.flush()
     pipeline.cancel_scheduled_payments(session, inv, actor, f"material edit created version {nv.version}")
+    from app.services import card_routes
+    card_routes.supersede_for_new_version(session, inv, actor, nv.version)
     audit.record(session, actor=actor, action="invoice.version_created", object_type="invoice", object_id=inv.id,
                  object_version=nv.version, before=f"v{old.version}", after=f"v{nv.version}",
                  details={"reason": reason, "changed_fields": sorted(changes.keys()) + (["lines"] if line_changes else [])
@@ -243,8 +245,11 @@ def dismiss_finding(session: Session, actor: User, inv: Invoice, *, finding_id: 
     if not reason or len(reason.strip()) < 10:
         raise Unprocessable("REASON_REQUIRED", "A documented reason (≥ 10 characters) is required.")
     v = pipeline.current_version(session, inv)
-    if f.code in {"DUPLICATE_VENDOR_IDENTITY", "DUPLICATE_INVOICE"} and actor.id == v.requester_id:
+    if actor.id == v.requester_id:
         raise Forbidden("SELF_DISMISSAL_DENIED", "The requester cannot dismiss findings on their own invoice.")
+    if v.provenance == "manual" and actor.id == v.created_by:
+        raise Forbidden("MAKER_CANNOT_DISMISS", "You made the edits that created this version; another authorized "
+                        "person must review and dismiss findings on it (maker-checker).")
     subject = (f.data or {}).get("subject", "")
     session.add(FindingDismissal(invoice_id=inv.id, version=inv.current_version, code=f.code, subject=subject,
                                  actor_id=actor.id, reason=reason))

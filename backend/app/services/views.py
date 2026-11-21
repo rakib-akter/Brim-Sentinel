@@ -21,6 +21,7 @@ from app.db.models import (
     Invoice,
     InvoiceVersion,
     Payment,
+    PaymentMethodChange,
     PaymentRoute,
     ResolutionCase,
     User,
@@ -30,7 +31,7 @@ from app.db.models import (
     utcnow,
 )
 from app.schemas import dto
-from app.services import approval_policy, bank, catalog, lifecycle as lc, pipeline, resolution
+from app.services import approval_policy, bank, card_routes, catalog, lifecycle as lc, pipeline, resolution
 from app.services.validation import OPEN_BANK_CHANGE_STATES
 from app.services.vendors import mask, similar_identities
 
@@ -241,9 +242,7 @@ def detail(ctx: Ctx, inv: Invoice) -> dto.InvoiceDetail:
         delegated_from_id=st.delegated_from_id, escalation_reason=st.escalation_reason, status=status,
         decided_by_id=d.actor_id if d else None, decided_at=d.decided_at if d else None,
         decision_reason=d.reason if d else None) for st, status, d in steps]
-    excluded = {st.assigned_actor_id for st, _, _ in steps if st.assigned_actor_id}
-    if v.requester_id:
-        excluded.add(v.requester_id)
+    excluded = pipeline.release_exclusions(s, inv, v)
     p = _live_payment(s, inv)
     if p and p.prepared_by:
         excluded.add(p.prepared_by)
@@ -281,7 +280,8 @@ def detail(ctx: Ctx, inv: Invoice) -> dto.InvoiceDetail:
         **base.model_dump(), provenance=v.provenance, language=v.language,
         document_refs=[{"id": doc.id, "filename": doc.filename, "sha256": doc.sha256, "mime_type": doc.mime_type,
                         "size_bytes": doc.size_bytes, "url": f"/api/v1/invoices/{inv.id}/document",
-                        "extraction_provenance": doc.extraction_provenance, "source_ref": doc.source_ref}] if doc else [],
+                        "extraction_provenance": doc.extraction_provenance, "source_ref": doc.source_ref,
+                        "ocr": (v.evidence or {}).get("ocr")}] if doc else [],
         extracted_fields={"vendor_name": v.vendor_name_raw, "vendor_tax_id": v.vendor_tax_id,
                           "vendor_match": v.vendor_match, "document_type": v.document_type,
                           "invoice_number": v.invoice_number_raw, "invoice_date": v.invoice_date,
@@ -305,6 +305,41 @@ def visible(ctx: Ctx, inv: Invoice, v: InvoiceVersion | None = None) -> bool:
     v = v or pipeline.current_version(ctx.s, inv)
     assigned = {st.assigned_actor_id for st in pipeline.approval_steps(ctx.s, inv.id, v.version)}
     return can_view_invoice(ctx.actor, inv, v, assigned)
+
+
+# ------------------------------------------------------------------ card routes / method changes
+def card_route_out(ctx: Ctx, r: PaymentRoute) -> dto.CardRouteOut:
+    a = ctx.actor
+    allowed = []
+    if r.status == "UNVERIFIED" and r.registered_by and has(a, "card_route.verify") and a.id != r.registered_by:
+        allowed.append("record_verification")
+    return dto.CardRouteOut(
+        id=r.id, vendor_id=r.vendor_id, method="CARD", status=r.status,
+        merchant_reference_masked=mask(r.account_last4), provenance=r.provenance, registered_by=r.registered_by,
+        registered_at=r.registered_at, verified_by=r.verified_by, verified_at=r.verified_at,
+        verification={k: v for k, v in (r.verification or {}).items()}, row_version=r.row_version or 1,
+        allowed_actions=allowed)
+
+
+def method_change_out(ctx: Ctx, c: PaymentMethodChange) -> dto.MethodChangeOut:
+    a = ctx.actor
+    inv = ctx.s.get(Invoice, c.invoice_id)
+    current = inv is not None and inv.current_version == c.invoice_version
+    route = ctx.s.get(PaymentRoute, c.route_id)
+    v = pipeline.current_version(ctx.s, inv) if inv is not None else None
+    excluded = {c.requested_by, v.requester_id if v else None,
+                route.registered_by if route else None, route.verified_by if route else None}
+    allowed = []
+    if c.state == "REQUESTED" and current and has(a, "payment_method.authorize") and a.id not in excluded:
+        allowed += ["authorize", "decline"]
+    return dto.MethodChangeOut(
+        id=c.id, invoice_id=c.invoice_id, invoice_version=c.invoice_version, vendor_id=c.vendor_id,
+        from_method=c.from_method, to_method=c.to_method, route_id=c.route_id, state=c.state,
+        requested_by=c.requested_by, requested_at=c.requested_at.isoformat(), reason=c.reason,
+        gate_snapshot=c.gate_snapshot or {}, supporting_card_history=c.supporting_card_history or {},
+        decided_by=c.decided_by, decided_at=c.decided_at.isoformat() if c.decided_at else None,
+        decision_notes=c.decision_notes, row_version=c.row_version, applies_to_current_version=current,
+        allowed_actions=allowed)
 
 
 # ------------------------------------------------------------------ bank / cases
@@ -341,8 +376,10 @@ def wizard(ctx: Ctx, case: ResolutionCase, bc: VendorBankChange | None, inv: Inv
     if bc is not None and bc.state == "REJECTED":
         failures.append("CALLBACK_DENIED_CHANGE")
     vendor = ctx.vendors.get(inv.vendor_id or "")
-    card_route = s.scalar(select(PaymentRoute).where(PaymentRoute.vendor_id == inv.vendor_id,
-                                                     PaymentRoute.method == "CARD", PaymentRoute.status == "VERIFIED"))
+    card_route = card_routes.verified_card_route(s, inv.vendor_id)
+    pmc = card_routes.active_change(s, inv.id, inv.current_version)
+    pending_pmc = next((c for c in card_routes.changes_for(s, inv.id)
+                        if c.state == "REQUESTED" and c.invoice_version == inv.current_version), None)
     eft_route = s.get(PaymentRoute, bc.new_route_id) if bc and bc.new_route_id else None
     options = [{"method": "EFT", "available": bool(eft_route and eft_route.status == "VERIFIED"),
                 "account_masked": mask(eft_route.account_last4) if eft_route else None,
@@ -352,16 +389,19 @@ def wizard(ctx: Ctx, case: ResolutionCase, bc: VendorBankChange | None, inv: Inv
                 "reason": None if card_route else
                 ("No separately verified merchant route on file"
                  + ("; vendor does not accept card" if vendor and not vendor.accepts_card_payment else "")
-                 + ". Card transaction history alone never proves merchant ownership.")}]
+                 + ". Card transaction history alone never proves merchant ownership."),
+                "method_change": {"id": (pmc or pending_pmc).id, "state": (pmc or pending_pmc).state}
+                if (pmc or pending_pmc) else None,
+                "requires": "finance-manager authorization of the method change (two-person control)"}]
     if card_route is None:
         failures.append("VERIFIED_CARD_ROUTE_UNAVAILABLE")
     if any(f.code == "NO_ELIGIBLE_RELEASER" for f in pipeline.blocking_findings(s, inv.id, inv.current_version)):
         failures.append("NO_ELIGIBLE_RELEASER")
-    hold = inv.lifecycle_state == lc.ON_HOLD or not authorized
+    hold = inv.lifecycle_state == lc.ON_HOLD or (not authorized and pmc is None)
     steps = [
         {"key": "review", "label": "Review", "done": True},
         {"key": "verify_supplier", "label": "Verify supplier", "done": verified},
-        {"key": "choose_route", "label": "Choose payment route", "done": authorized},
+        {"key": "choose_route", "label": "Choose payment route", "done": authorized or pmc is not None},
         {"key": "request_authorization", "label": "Request authorization", "done": requested},
     ]
     current = next((st["key"] for st in steps if not st["done"]), "done")

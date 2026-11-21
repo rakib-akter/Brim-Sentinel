@@ -22,7 +22,8 @@ def _filtered(invoice_id: str | None, actor_id: str | None, action: str | None, 
     if actor_id:
         stmt = stmt.where(AuditEvent.actor_id == actor_id)
     if action:
-        stmt = stmt.where(AuditEvent.action.like(f"{action}%"))
+        esc = action.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        stmt = stmt.where(AuditEvent.action.like(f"{esc}%", escape="\\"))
     if result:
         stmt = stmt.where(AuditEvent.result == result.upper())
     return stmt

@@ -3,6 +3,8 @@ service → serialize. All financial decisions are made by backend services."""
 from __future__ import annotations
 
 import logging
+import math
+import re
 import uuid
 
 from fastapi import FastAPI, Request
@@ -12,10 +14,13 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
 from app.core.errors import DomainError
+from app.core.ratelimit import SlidingWindowLimiter
 from app.db.session import init_db, session_scope
 from app.services import audit
 
 log = logging.getLogger("brim")
+_CID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+MUTATING = {"POST", "PATCH", "PUT", "DELETE"}
 
 TAGS = [
     {"name": "meta", "description": "Health, demo identity and dashboard."},
@@ -48,7 +53,7 @@ def _invoice_for(s, obj_type: str, obj_id: str, request: Request) -> str | None:
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title="Brim Sentinel API", version="1.0.0",
+    app = FastAPI(title="Brim Sentinel API", version="1.1.0",
                   description="Detect. Resolve. Settle. Explain. — AP automation and payment controls for "
                               "Harborline Logistics (synthetic). All payments are SIMULATED. Demo identities "
                               "(X-Demo-User-Id) are a labelled simulation, not authentication.",
@@ -57,11 +62,35 @@ def create_app() -> FastAPI:
                        allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
                        allow_headers=["Content-Type", "X-Demo-User-Id", "X-Demo-Actor", "Idempotency-Key"])
 
+    limiter = SlidingWindowLimiter(settings.rate_limit_per_minute)
+
     @app.middleware("http")
     async def correlation(request: Request, call_next):  # noqa: ANN001, ANN202
-        request.state.correlation_id = request.headers.get("x-correlation-id") or uuid.uuid4().hex
+        supplied = request.headers.get("x-correlation-id") or ""
+        # Client-supplied IDs end up in audit records: accept only a short, safe token.
+        request.state.correlation_id = supplied if _CID_RE.match(supplied) else uuid.uuid4().hex
+        if request.method in MUTATING:
+            who = (request.headers.get("x-demo-user-id") or request.headers.get("x-demo-actor") or "").strip()
+            key = f"actor:{who[:64]}" if who else f"addr:{request.client.host if request.client else 'unknown'}"
+            wait = limiter.check(key)
+            if wait is not None:
+                resp = _error(429, "RATE_LIMITED", "Too many changes in a short time. Wait and try again; nothing "
+                              "was changed.", {"retry_after_seconds": math.ceil(wait)}, request.state.correlation_id)
+                resp.headers["Retry-After"] = str(math.ceil(wait))
+                resp.headers["x-correlation-id"] = request.state.correlation_id
+                return resp
         resp = await call_next(request)
         resp.headers["x-correlation-id"] = request.state.correlation_id
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("Referrer-Policy", "no-referrer")
+        resp.headers.setdefault("Cache-Control", "no-store")
+        if request.url.path.endswith("/document"):
+            # Source documents are untrusted: never execute anything they contain; only the
+            # API's own origins and the configured frontends may frame them.
+            origins = " ".join(settings.frontend_origins)
+            resp.headers["Content-Security-Policy"] = f"sandbox; default-src 'none'; frame-ancestors 'self' {origins}"
+        else:
+            resp.headers.setdefault("X-Frame-Options", "DENY")
         return resp
 
     @app.exception_handler(DomainError)

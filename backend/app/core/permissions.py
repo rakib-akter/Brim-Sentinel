@@ -24,6 +24,12 @@ PERMISSIONS: dict[str, set[str]] = {
     "case.update": {"ap_clerk", "finance_manager", "controller_admin"},
     "case.authorization_request": {"ap_clerk", "finance_manager", "controller_admin"},
     "vendor.activate": {"finance_manager", "controller_admin"},
+    # §6.2 virtual-card rerouting: registration and independent verification of a card route,
+    # then a method change that only a finance manager may authorize (PRD wizard step 3).
+    "card_route.register": {"ap_clerk", "finance_manager", "controller_admin"},
+    "card_route.verify": {"ap_clerk", "finance_manager", "controller_admin"},
+    "payment_method.request": {"ap_clerk", "finance_manager", "controller_admin"},
+    "payment_method.authorize": {"finance_manager"},
     "vendor.onboard_request": {"ap_clerk", "finance_manager", "controller_admin"},
     "audit.read_all": {"auditor", "controller_admin", "finance_manager"},
     "audit.export": {"auditor", "controller_admin"},

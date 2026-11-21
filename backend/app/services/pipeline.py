@@ -96,6 +96,31 @@ def step_statuses(session: Session, invoice_id: str, version: int) -> list[tuple
     return out
 
 
+def release_exclusions(session: Session, inv: Invoice, v: InvoiceVersion) -> set[str]:
+    """People who may not release this invoice version (segregation of duties): assigned and
+    actual approvers (P11), the requester, the author of a manual version (maker-checker), the
+    requester/authorizer of a payment-method change for this version, and whoever scheduled a
+    live payment."""
+    from app.db.models import PaymentMethodChange
+
+    out = {s.assigned_actor_id for s in approval_steps(session, inv.id, v.version) if s.assigned_actor_id}
+    out |= {d.actor_id for d in decisions(session, inv.id, v.version).values()}
+    if v.requester_id:
+        out.add(v.requester_id)
+    if v.provenance == "manual" and v.created_by:
+        out.add(v.created_by)
+    for c in session.scalars(select(PaymentMethodChange).where(
+            PaymentMethodChange.invoice_id == inv.id, PaymentMethodChange.invoice_version == v.version,
+            PaymentMethodChange.state == "AUTHORIZED")):
+        out |= {c.requested_by, c.decided_by} - {None}
+    for p in session.scalars(select(Payment).where(Payment.invoice_id == inv.id, Payment.invoice_version == v.version,
+                                                   Payment.source == "simulation",
+                                                   Payment.state.not_in({"CANCELLED", "FAILED"}))):
+        if p.prepared_by:
+            out.add(p.prepared_by)
+    return out
+
+
 def all_approved(session: Session, invoice_id: str, version: int) -> bool:
     st = step_statuses(session, invoice_id, version)
     return bool(st) and all(s == "APPROVED" for _, s, _ in st)
@@ -142,7 +167,7 @@ def create_from_document(session: Session, *, invoice_id: str, document_id: str,
         department_source=dept_src, requester_id=req_id, requester_source=req_src, language=ex.language,
         uncertain_fields=sorted(set(ex.uncertain_fields)),
         evidence={"fields": ex.evidence, "injection_phrases": ex.injection_phrases, "credit_ref": ex.credit_ref,
-                  "document_id": doc.id, "extraction_status": ex.status})
+                  "document_id": doc.id, "extraction_status": ex.status, "ocr": ex.ocr or None})
     session.add(v)
     for ln in ex.lines:
         session.add(InvoiceLine(invoice_id=inv.id, version=1, line_no=ln.line_no, description=ln.description,
@@ -155,7 +180,10 @@ def create_from_document(session: Session, *, invoice_id: str, document_id: str,
     session.flush()
     audit.record(session, actor=actor, action="invoice.extracted", object_type="invoice", object_id=inv.id,
                  object_version=1, details={"provenance": ex.provenance, "status": ex.status,
-                                            "uncertain_fields": v.uncertain_fields, "vendor_match": match},
+                                            "uncertain_fields": v.uncertain_fields, "vendor_match": match,
+                                            "ocr": {k: ex.ocr.get(k) for k in ("status", "engine", "engine_version",
+                                                                                "mean_confidence", "message")
+                                                    if ex.ocr.get(k) is not None} or None},
                  evidence=[{"type": "document", "ref": doc.id}])
     process(session, inv, actor=actor, reason="initial intake")
     return inv
@@ -208,7 +236,7 @@ def _route(session: Session, inv: Invoice, v: InvoiceVersion, vendor, po_over: b
     chain = approval_policy.build_chain(
         v.amount_cad_minor, dept_manager_id=dept.manager_user_id if dept else None, requester_id=v.requester_id,
         vendor_status=vendor.status if vendor else None, vendor_category=vendor.category if vendor else None,
-        po_over_balance=po_over, users=users)
+        po_over_balance=po_over, users=users, maker_id=v.created_by if v.provenance == "manual" else None)
     for i, s in enumerate(chain.steps):
         session.add(ApprovalStep(id=f"AS-{inv.id}-v{v.version}-{s.step_key}", invoice_id=inv.id, version=v.version,
                                  step_index=i, step_key=s.step_key, required_role=s.required_role,
@@ -223,6 +251,8 @@ def _route(session: Session, inv: Invoice, v: InvoiceVersion, vendor, po_over: b
         excluded = {s.assigned_actor_id for s in chain.steps if s.assigned_actor_id}
         if v.requester_id:
             excluded.add(v.requester_id)
+        if v.provenance == "manual" and v.created_by:
+            excluded.add(v.created_by)  # maker-checker: the version author cannot release it either
         rel = approval_policy.eligible_releasers(v.amount_cad_minor, users, excluded)
         pol = ["P09", "P11"] if v.amount_cad_minor <= 100_000_00 else ["P10", "P11"]
         if not rel:
@@ -239,7 +269,8 @@ def _route(session: Session, inv: Invoice, v: InvoiceVersion, vendor, po_over: b
     return results
 
 
-def process(session: Session, inv: Invoice, *, actor: User | None, reason: str) -> list[ValidationFinding]:
+def process(session: Session, inv: Invoice, *, actor: User | None, reason: str,
+            cascade: bool = True) -> list[ValidationFinding]:
     v = current_version(session, inv)
     lines = version_lines(session, inv.id, v.version)
     scheduled = inv.lifecycle_state == lc.SCHEDULED
@@ -248,8 +279,8 @@ def process(session: Session, inv: Invoice, *, actor: User | None, reason: str) 
 
     if "document" in (v.uncertain_fields or []):
         results = [Result("extraction", "EXTRACTION_INCOMPLETE", "UNKNOWN", True,
-                          "No readable text layer, no OCR engine available and no labelled fixture. "
-                          "Manual entry required; nothing was guessed.", "high")]
+                          "No readable text layer and OCR produced no usable text (or is unavailable) and no "
+                          "labelled fixture exists. Manual entry required; nothing was guessed.", "high")]
         findings = _persist(session, inv, v, results, [])
         if inv.lifecycle_state != lc.ON_HOLD:
             lc.transition(session, inv, lc.ON_HOLD, actor=actor, reason="extraction failed")
@@ -265,10 +296,14 @@ def process(session: Session, inv: Invoice, *, actor: User | None, reason: str) 
     dups, dup_results = duplicates.find(session, inv, v)
     results.extend(dup_results)
     ar = anomaly.evaluate(session, inv, v)
-    if ar.status == "SCORED" and ar.band in {"high", "medium"}:
-        results.append(Result("anomaly", "AMOUNT_UNUSUAL", "FAIL", False, ar.signals[0]["explanation"] +
-                              " Review priority only; not a fraud probability.", ar.band,
-                              data={"score": ar.score, "band": ar.band, "method": ar.method_version,
+    amount_part = (ar.inputs or {}).get("amount_component") or {}
+    amount_sig = anomaly.amount_signal(ar)
+    if ar.status == "SCORED" and amount_part.get("band") in {"high", "medium"} and amount_sig:
+        results.append(Result("anomaly", "AMOUNT_UNUSUAL", "FAIL", False, amount_sig["explanation"] +
+                              " Review priority only; not a fraud probability.", amount_part["band"],
+                              data={"score": amount_part.get("score"), "band": amount_part.get("band"),
+                                    "priority_score": ar.score, "priority_band": ar.band,
+                                    "method": ar.method_version,
                                     **{k: ar.inputs.get(k) for k in ("history_count",)}}))
     elif ar.status == "INSUFFICIENT_HISTORY":
         results.append(Result("anomaly", "AMOUNT_HISTORY", "NOT_APPLICABLE", False,
@@ -307,7 +342,25 @@ def process(session: Session, inv: Invoice, *, actor: User | None, reason: str) 
                           "fx_rate": v.fx_rate, "fx_date": v.fx_date},
                  evidence=[{"type": "finding", "ref": f.id} for f in findings if f.result in {"FAIL", "UNKNOWN"}])
     resolution.sync_cases(session, inv, v, findings, actor)
+    if cascade:
+        _cascade_split_billing(session, inv, findings, actor)
     return findings
+
+
+def _cascade_split_billing(session: Session, inv: Invoice, findings: list[ValidationFinding],
+                           actor: User | None) -> None:
+    """Split billing is a property of a group: when this invoice raises it, revalidate the other
+    members (which may have been processed before this invoice arrived) so all are held."""
+    split = next((f for f in findings if f.code == "SPLIT_BILLING_SUSPECTED" and f.blocking), None)
+    if split is None:
+        return
+    for rid in (split.data or {}).get("related_invoices", []):
+        other = session.get(Invoice, rid)
+        if other is None or other.lifecycle_state not in lc.REVALIDATABLE:
+            continue
+        if any(f.code == "SPLIT_BILLING_SUSPECTED" for f in latest_findings(session, other.id, other.current_version)):
+            continue
+        process(session, other, actor=actor, reason=f"related to possible split billing on {inv.id}", cascade=False)
 
 
 def _cancel_scheduled(session: Session, inv: Invoice, actor: User | None, why: str) -> None:

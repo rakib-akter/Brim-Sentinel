@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session
 from app.api.common import ERRORS
 from app.api.deps import get_actor, get_db
 from app.core.errors import NotFound
-from app.db.models import User, Vendor
+from app.db.models import PaymentRoute, User, Vendor
 from app.schemas import dto
-from app.services import bank, views
+from app.services import bank, card_routes, views
 
 router = APIRouter(prefix="/api/v1/vendors", tags=["vendors"], responses=ERRORS)
 
@@ -88,3 +88,37 @@ def authorize(change_id: str, body: dto.AuthorizeRouteRequest, actor: User = Dep
     bank.authorize_route(db, actor, bc, notes=body.notes, expected_row_version=body.expected_row_version)
     db.commit()
     return views.bank_change_out(views.Ctx(db, actor), bc)
+
+
+# ------------------------------------------------------------------ virtual-card routes (§6.2, simulated)
+@router.get("/{vendor_id}/card-routes", response_model=list[dto.CardRouteOut])
+def list_card_routes(vendor_id: str, actor: User = Depends(get_actor),
+                     db: Session = Depends(get_db)) -> list[dto.CardRouteOut]:
+    v = _vendor(db, vendor_id)
+    ctx = views.Ctx(db, actor)
+    return [views.card_route_out(ctx, r) for r in db.scalars(
+        select(PaymentRoute).where(PaymentRoute.vendor_id == v.id, PaymentRoute.method == "CARD")
+        .order_by(PaymentRoute.id))]
+
+
+@router.post("/{vendor_id}/card-routes", response_model=dto.CardRouteOut)
+def register_card_route(vendor_id: str, body: dto.CardRouteCreate, actor: User = Depends(get_actor),
+                        db: Session = Depends(get_db)) -> dto.CardRouteOut:
+    """Register a SIMULATED Brim virtual-card route (UNVERIFIED). The merchant reference must come
+    from the vendor, never from a card descriptor; a different person must verify it."""
+    r = card_routes.register_card_route(db, actor, _vendor(db, vendor_id), merchant_reference=body.merchant_reference,
+                                        evidence_ref=body.evidence_ref, notes=body.notes)
+    db.commit()
+    return views.card_route_out(views.Ctx(db, actor), r)
+
+
+@router.post("/card-routes/{route_id}/verification", response_model=dto.CardRouteOut)
+def verify_card_route(route_id: str, body: dto.CardRouteVerificationRequest, actor: User = Depends(get_actor),
+                      db: Session = Depends(get_db)) -> dto.CardRouteOut:
+    """Independent callback to a trusted contact on file before registration. Not the registrant."""
+    r = card_routes.get_route(db, route_id)
+    card_routes.verify_card_route(db, actor, r, trusted_contact_id=body.trusted_contact_id, method=body.method,
+                                  occurred_at=body.occurred_at, outcome=body.outcome, notes=body.notes,
+                                  evidence_ref=body.evidence_ref, expected_row_version=body.expected_row_version)
+    db.commit()
+    return views.card_route_out(views.Ctx(db, actor), r)

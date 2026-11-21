@@ -11,7 +11,7 @@ from fastapi import Depends, Header, Request
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.errors import Unauthenticated
+from app.core.errors import Forbidden, Unauthenticated
 from app.db.models import User
 from app.db.session import new_session
 
@@ -37,6 +37,8 @@ def get_actor(request: Request, db: Session = Depends(get_db),
         raise Unauthenticated("IDENTITY_REQUIRED", "Select a demo identity (X-Demo-User-Id header).")
     user = db.get(User, uid)
     if user is None:
-        raise Unauthenticated("IDENTITY_UNKNOWN", f"Unknown demo identity {uid!r}.")
+        raise Unauthenticated("IDENTITY_UNKNOWN", f"Unknown demo identity {uid[:64]!r}.")
+    if user.status == "terminated":
+        raise Forbidden("ACTOR_NOT_ACTIVE", f"User {user.id} is terminated; access is revoked.")
     request.state.actor_id = user.id
     return user

@@ -36,9 +36,11 @@ def test_at01_french_invoice_taxes_and_scan_provenance(client):
     assert d["language"] == "fr" and d["provenance"] == "pdf_text"
     kinds = {t["kind"]: t["amount_minor"] for t in d["taxes"]}
     assert kinds == {"GST": 21813, "QST": 43518}
-    scan = inv(client, "IN-EM-011-1")  # scan_8749.png
-    assert scan["provenance"] == "demo_fixture"  # never labelled as OCR
-    assert scan["document_refs"][0]["extraction_provenance"] == "demo_fixture"
+    scan = inv(client, "IN-EM-011-1")  # scan_8749.png — read by local OCR, not a fixture
+    assert scan["provenance"] == "ocr"
+    assert scan["document_refs"][0]["extraction_provenance"] == "ocr"
+    assert scan["invoice_number"] == "PR26-1012" and scan["amount_minor"] == 471928
+    assert scan["uncertain_fields"] == []
 
 
 def test_at03_unknown_vendor_held(client):
@@ -136,7 +138,13 @@ def test_at33_queen_street_fixed_rent_not_unusual(client):
 
 
 def test_at48_sparse_history_shows_uncertainty(client):
-    d = inv(client, "IN-EM-001-1")
+    d = inv(client, "IN-EM-001-1")  # Blue Heron: unknown supplier, no history
+    a = d["anomaly"]
+    assert a["status"] == "INSUFFICIENT_HISTORY"  # no amount score is fabricated
+    assert a["inputs"]["amount_component"]["score"] == "0" and "Limited supplier history" in \
+        finding(d, "AMOUNT_HISTORY")["rationale"]
+    assert [s["signal"] for s in a["signals"]] == ["unknown_supplier"]  # identity signal shown separately
+    d = inv(client, "IN-EM-002-1")  # Keystone: known supplier with < 5 prior invoices, no identity signal
     assert d["anomaly"]["status"] == "INSUFFICIENT_HISTORY" and d["risk_band"] == "insufficient_history"
 
 

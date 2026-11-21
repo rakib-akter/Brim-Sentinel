@@ -1,5 +1,36 @@
 # API changelog (backend-owned; `backend/openapi.json` is authoritative)
 
+## 1.1.0 — 2026-11-21
+
+Additive; no existing field or endpoint was removed or renamed.
+
+* **Virtual-card rerouting (simulated)**
+  * `GET|POST /api/v1/vendors/{vendor_id}/card-routes` — list / register a card route (`CardRouteCreate`
+    → `CardRouteOut`, starts `UNVERIFIED`).
+  * `POST /api/v1/vendors/card-routes/{route_id}/verification` — independent callback
+    (`CardRouteVerificationRequest`, same fields as bank-change verification).
+  * `GET|POST /api/v1/invoices/{invoice_id}/payment-method-changes` — list / request EFT → CARD
+    (`MethodChangeCreate {expected_version, to_method: "CARD", reason}` → `MethodChangeOut`).
+  * `POST /api/v1/invoices/{invoice_id}/payment-method-changes/{change_id}/decision` —
+    `{decision: AUTHORIZED|DECLINED, notes, expected_row_version?}` (finance_manager only).
+  * Wizard `route_options[CARD]` now carries `method_change {id, state}` and `requires`.
+* `POST /payments/prepare`: a `method` different from the invoice's now returns 422
+  `METHOD_CHANGE_NOT_AUTHORIZED` (or `METHOD_CHANGE_REQUIRES_CARD` when a card change is authorized).
+  New release denials: `METHOD_CHANGE_PARTY_CANNOT_RELEASE`, `VERSION_AUTHOR_CANNOT_RELEASE`.
+* New finding codes: `SPLIT_BILLING_SUSPECTED` (blocking, dismissible). New dismissal denial
+  `MAKER_CANNOT_DISMISS`; `SELF_DISMISSAL_DENIED` now applies to every finding.
+* `InvoiceDetail.document_refs[].ocr` — OCR engine/version, mean confidence, threshold, low-confidence
+  tokens and normalizations. `provenance` may now be `ocr`. Line `coding_method` is
+  `tfidf_logreg_v1` (fallback `knn_rapidfuzz_v1`); `coding_detail` adds `model_variant`,
+  `model_probability`, `knn_gl_account`, `knn_agrees`.
+* Anomaly: `method_version` `robust_mad_grouped_noisy_or_v2`; `signals[]` may include identity signals
+  (`unverified_bank_change`, `remit_account_differs_from_master`, `lookalike_vendor_identity`,
+  `unknown_supplier`); `inputs.amount_component` and `inputs.groups` added; `as_of` is now the
+  evaluation date. `risk_band` combines groups (an unknown supplier with no history is `medium`).
+* 429 `RATE_LIMITED` (with `Retry-After`) on POST/PATCH beyond `RATE_LIMIT_PER_MINUTE` per actor.
+* Terminated identities receive 403 `ACTOR_NOT_ACTIVE` on every request.
+* Bank-change requests require a 3-digit institution, 5-digit transit and 5–12-digit account.
+
 ## 1.0.0 — 2026-11-21 (initial contract)
 
 * Base path `/api/v1`; `GET /health`; `GET /openapi.json` (also committed as `backend/openapi.json`).

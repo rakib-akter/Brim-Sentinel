@@ -1,10 +1,12 @@
 """CodingService (FR-03): GL + department suggestion per line.
 
-NOTE: the PRD references a supplied `coding_model.py` (TF-IDF + logistic regression). That file is
-NOT present in this repository, so it is not used and its reported metrics are not claimed.
-This service implements a transparent nearest-neighbour suggester over the historical ledger
-lines (RapidFuzz similarity), with vendor default GL fallback. Department: PO → vendor history
-→ unknown (never guessed). Confidence < 0.70 requires human review."""
+GL: the supervised TF-IDF + logistic-regression model in `app/ml/coding_model.py` (temporal-
+holdout metrics in `docs/eval/coding_model_metrics.json`). Confidence is the model's top-class
+probability. Suppliers the model never saw use the text-only variant and are capped below the
+review threshold (always human-reviewed). Three supporting historical lines come from the
+RapidFuzz nearest-neighbour search, which is also the complete fallback when the model cannot be
+loaded (`knn_rapidfuzz_v1`). Department: PO → vendor history → unknown (never guessed).
+Confidence < 0.70 requires human review; the suggestion never approves anything."""
 from __future__ import annotations
 
 from collections import Counter, defaultdict
@@ -16,8 +18,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import GLAccount, Invoice, InvoiceLine, InvoiceVersion, Vendor
+from app.ml import coding_model
 
-METHOD = "knn_rapidfuzz_v1"
+METHOD = "knn_rapidfuzz_v1"  # fallback / supporting-example method
+MODEL_METHOD = coding_model.MODEL_VERSION
+UNSEEN_VENDOR_CAP = Decimal("0.69")
 REVIEW_THRESHOLD = Decimal("0.70")
 K = 5
 
@@ -69,6 +74,36 @@ def suggest_line(history: list[dict[str, Any]], vendor_id: str | None, descripti
     }
 
 
+def _dec(p: float) -> Decimal:
+    return Decimal(str(round(p, 2)))
+
+
+def suggest_line_model(history: list[dict[str, Any]], vendor: Vendor | None, description: str,
+                       province: str | None, gl_names: dict[str, str]) -> dict[str, Any]:
+    """Model suggestion with kNN supporting examples; falls back to `suggest_line` (RapidFuzz)."""
+    vendor_id = vendor.id if vendor else None
+    default_gl = vendor.default_gl_account if vendor else None
+    knn = suggest_line(history, vendor_id, description, default_gl, gl_names)
+    model = coding_model.load_model()
+    if model is None:
+        return {**knn, "fallback_reason": "coding model unavailable"}
+    pred = model.predict(description=description, vendor_id=vendor_id, category=vendor.category if vendor else None,
+                         default_gl=default_gl, province=province)
+    (best_gl, best_p), *rest = pred["ranked"]
+    conf = _dec(best_p)
+    if not pred["seen_vendor"]:
+        conf = min(conf, UNSEEN_VENDOR_CAP)  # unseen supplier: always human-reviewed
+    return {
+        "gl_account": best_gl, "gl_name": gl_names.get(best_gl), "confidence": str(conf), "method": MODEL_METHOD,
+        "model_variant": pred["variant"], "model_source": model.source, "model_probability": round(best_p, 4),
+        "scope": "same_vendor" if pred["seen_vendor"] else "unseen_vendor",
+        "alternatives": [{"gl_account": g, "gl_name": gl_names.get(g), "weight": round(p, 2)} for g, p in rest],
+        "similar_lines": knn["similar_lines"],
+        "knn_gl_account": knn["gl_account"], "knn_agrees": knn["gl_account"] == best_gl,
+        "vendor_default_gl": default_gl,
+    }
+
+
 def infer_line_type(history: list[dict[str, Any]], vendor_id: str | None) -> str | None:
     types = Counter(h["line_type"] for h in history if vendor_id and h["vendor_id"] == vendor_id and h["line_type"])
     return types.most_common(1)[0][0] if types else None
@@ -85,12 +120,11 @@ def code_version(session: Session, version: InvoiceVersion) -> list[InvoiceLine]
     for ln in lines:
         if ln.coding_status in {"CONFIRMED", "OVERRIDDEN"}:
             continue
-        s = suggest_line(history, version.vendor_id, ln.description, vendor.default_gl_account if vendor else None,
-                         gl_names)
+        s = suggest_line_model(history, vendor, ln.description, version.ship_to_province, gl_names)
         ln.gl_account = s["gl_account"]
         ln.department_id = version.department_id
         ln.coding_confidence = s["confidence"]
-        ln.coding_method = METHOD
+        ln.coding_method = s["method"]
         ln.line_type = ln.line_type or line_type
         needs_review = Decimal(s["confidence"]) < REVIEW_THRESHOLD or version.department_id is None
         ln.coding_status = "NEEDS_REVIEW" if needs_review else "SUGGESTED"

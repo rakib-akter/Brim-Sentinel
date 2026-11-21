@@ -132,6 +132,40 @@ class PaymentRoute(Base):
     verified_at: Mapped[str | None]
     bank_change_id: Mapped[str | None]
     created_at: Mapped[dt.datetime] = mapped_column(default=utcnow)
+    # CARD routes registered in the app: a human-entered merchant reference (never inferred
+    # from a card descriptor) and an independent verifier distinct from the registrant.
+    merchant_reference: Mapped[str | None] = mapped_column(String, default=None)
+    registered_by: Mapped[str | None] = mapped_column(String, default=None)
+    registered_at: Mapped[str | None] = mapped_column(String, default=None)
+    verified_by: Mapped[str | None] = mapped_column(String, default=None)
+    verification: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    row_version: Mapped[int] = mapped_column(Integer, default=1)
+
+
+class PaymentMethodChange(Base):
+    """EFT → simulated Brim virtual-card method change for ONE invoice version (PRD §6.2).
+
+    REQUESTED → AUTHORIZED | DECLINED; an AUTHORIZED change applies only while the invoice
+    version it is bound to is current (a material edit makes it SUPERSEDED). Authorization is a
+    finance manager who is neither the requester nor the card-route registrant/verifier."""
+    __tablename__ = "payment_method_changes"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    invoice_id: Mapped[str] = mapped_column(ForeignKey("invoices.id"), index=True)
+    invoice_version: Mapped[int]
+    vendor_id: Mapped[str] = mapped_column(ForeignKey("vendors.id"))
+    from_method: Mapped[str]
+    to_method: Mapped[str]
+    route_id: Mapped[str]
+    state: Mapped[str]  # REQUESTED | AUTHORIZED | DECLINED | SUPERSEDED
+    requested_by: Mapped[str]
+    requested_at: Mapped[dt.datetime] = mapped_column(default=utcnow)
+    reason: Mapped[str]
+    gate_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    supporting_card_history: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    decided_by: Mapped[str | None] = mapped_column(String, default=None)
+    decided_at: Mapped[dt.datetime | None] = mapped_column(default=None)
+    decision_notes: Mapped[str | None] = mapped_column(Text, default=None)
+    row_version: Mapped[int] = mapped_column(Integer, default=1)
 
 
 class Contract(Base):

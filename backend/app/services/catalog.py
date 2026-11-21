@@ -128,6 +128,11 @@ CATALOG: dict[str, FindingType] = {
     "DUPLICATE_INVOICE": FindingType(
         "This invoice was already received or paid", "Paying twice is a direct loss.",
         "Cancel this copy, or document why it is not a duplicate.", dismissible=True, owner_role="finance_manager"),
+    "SPLIT_BILLING_SUSPECTED": FindingType(
+        "Similar bills from this supplier add up past an approval threshold",
+        "Splitting one purchase into several smaller invoices can avoid finance-manager approval (P02).",
+        "Finance manager reviews the related invoices together; dismiss with a documented reason if they are "
+        "genuinely separate, or cancel/consolidate them.", dismissible=True, owner_role="finance_manager"),
     "DUPLICATE_CANDIDATE": FindingType(
         "Possible duplicate invoice", "Similar invoices may be the same bill sent twice.",
         "Compare with the matching record; dismiss with a reason if legitimate.",

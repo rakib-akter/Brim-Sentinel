@@ -21,6 +21,7 @@ from app.db.models import (
     Invoice,
     InvoiceLine,
     InvoiceVersion,
+    PaymentMethodChange,
     PaymentRoute,
     PurchaseOrder,
     User,
@@ -406,6 +407,11 @@ def check_bank(session: Session, version: InvoiceVersion, vendor: Vendor | None)
     out: list[Result] = []
     open_changes = list(session.scalars(select(VendorBankChange).where(
         VendorBankChange.vendor_id == vendor.id, VendorBankChange.state.in_(OPEN_BANK_CHANGE_STATES))))
+    pmc = session.scalar(select(PaymentMethodChange).where(
+        PaymentMethodChange.invoice_id == version.invoice_id, PaymentMethodChange.invoice_version == version.version,
+        PaymentMethodChange.state == "AUTHORIZED"))
+    if pmc is not None:
+        return _check_card_reroute(session, version, vendor, pmc, open_changes)
     for bc in open_changes:
         out.append(Result(
             "bank_change", "BANK_CHANGE_UNVERIFIED", "FAIL", True,
@@ -458,6 +464,90 @@ def check_bank(session: Session, version: InvoiceVersion, vendor: Vendor | None)
     return out
 
 
+def _check_card_reroute(session: Session, version: InvoiceVersion, vendor: Vendor, pmc: PaymentMethodChange,
+                        open_changes: list[VendorBankChange]) -> list[Result]:
+    """An authorized EFT → CARD change for THIS version: the EFT destination is not used, so
+    an unverified bank change no longer blocks this version — but only while the card route is
+    still VERIFIED and the vendor still accepts card. EFT to the changed account stays blocked."""
+    route = session.get(PaymentRoute, pmc.route_id)
+    out: list[Result] = []
+    if route is None or route.status != "VERIFIED" or not vendor.accepts_card_payment:
+        out.append(Result("payment_route", "PAYMENT_ROUTE_UNAVAILABLE", "FAIL", True,
+                          f"Authorized method change {pmc.id} points to card route {pmc.route_id}, which is no longer "
+                          f"verified or accepted. No route is available.", "high",
+                          evidence=[_ev("payment_method_change", pmc.id), _ev("payment_route", pmc.route_id)]))
+        for bc in open_changes:
+            out.append(Result("bank_change", "BANK_CHANGE_UNVERIFIED", "FAIL", True,
+                              f"Bank change {bc.id} has not been independently verified (state {bc.state}).",
+                              "critical", evidence=[_ev("bank_change", bc.id)],
+                              data={"bank_change_id": bc.id}, subject=bc.id))
+        return out
+    for bc in open_changes:
+        out.append(Result(
+            "bank_change", "BANK_CHANGE_UNVERIFIED", "FAIL", False,
+            f"Bank change {bc.id} (****{bc.old_account_last4} → ****{bc.new_account_last4}) is still unverified, so EFT "
+            f"stays blocked. This version will be paid only through the independently verified simulated Brim "
+            f"virtual-card route {route.id} (method change {pmc.id} authorized by {pmc.decided_by}).", "medium",
+            evidence=[_ev("bank_change", bc.id), _ev("payment_method_change", pmc.id),
+                      _ev("payment_route", route.id, route.provenance)],
+            data={"bank_change_id": bc.id, "superseded_by_method_change": pmc.id}, subject=bc.id))
+    out.append(_pass("payment_route", "PAYMENT_ROUTE",
+                     f"Payment method changed EFT → CARD by {pmc.id}: verified simulated virtual-card route "
+                     f"{route.id} (authorized by {pmc.decided_by}).",
+                     evidence=[_ev("payment_method_change", pmc.id), _ev("payment_route", route.id, route.provenance)],
+                     data={"route_id": route.id, "method": "CARD", "method_change_id": pmc.id}))
+    return out
+
+
+SPLIT_WINDOW_DAYS = 14
+SPLIT_DESCRIPTION_SIMILARITY = 80
+SPLIT_THRESHOLD_MINOR = 10_000_00  # P01/P02 boundary
+
+
+def check_split_billing(session: Session, version: InvoiceVersion, lines: list[InvoiceLine]) -> list[Result]:
+    """Threshold-splitting control: open invoices from the same supplier, dated within 14 days,
+    each at or below CAD 10,000 but together above it, with similar line descriptions, are held
+    for a finance-manager review (dismissible with a documented reason). Historical paid
+    invoices are not considered — the concern is concurrent bills that avoid P02 together."""
+    from rapidfuzz import fuzz
+
+    amt = version.amount_cad_minor
+    if (not version.vendor_id or not version.invoice_date or amt is None or amt <= 0
+            or amt > SPLIT_THRESHOLD_MINOR):
+        return []
+    d0 = dt.date.fromisoformat(version.invoice_date)
+    lo = (d0 - dt.timedelta(days=SPLIT_WINDOW_DAYS)).isoformat()
+    hi = (d0 + dt.timedelta(days=SPLIT_WINDOW_DAYS)).isoformat()
+    mine = " ; ".join(ln.description for ln in lines)
+    rows = session.execute(
+        select(Invoice.id, InvoiceVersion.amount_cad_minor, InvoiceVersion.invoice_date, InvoiceVersion.version)
+        .join(InvoiceVersion, (InvoiceVersion.invoice_id == Invoice.id)
+              & (InvoiceVersion.version == Invoice.current_version))
+        .where(Invoice.vendor_id == version.vendor_id, Invoice.id != version.invoice_id,
+               Invoice.source_kind != "historical_ledger", Invoice.kind == "invoice",
+               Invoice.lifecycle_state.not_in({"REJECTED", "CANCELLED"}),
+               InvoiceVersion.invoice_date >= lo, InvoiceVersion.invoice_date <= hi)).all()
+    related = []
+    for r in rows:
+        if r.amount_cad_minor is None or not (0 < r.amount_cad_minor <= SPLIT_THRESHOLD_MINOR):
+            continue
+        theirs = " ; ".join(session.scalars(select(InvoiceLine.description).where(
+            InvoiceLine.invoice_id == r.id, InvoiceLine.version == r.version)))
+        if fuzz.token_set_ratio(mine, theirs) >= SPLIT_DESCRIPTION_SIMILARITY:
+            related.append(r)
+    total = amt + sum(r.amount_cad_minor for r in related)
+    if not related or total <= SPLIT_THRESHOLD_MINOR:
+        return []
+    ids = sorted(r.id for r in related)
+    return [Result(
+        "split_billing", "SPLIT_BILLING_SUSPECTED", "FAIL", True,
+        f"{len(related) + 1} similar invoices from this supplier within {SPLIT_WINDOW_DAYS} days ({', '.join(ids)} and "
+        f"this one) total {fmt(total)}, above the CAD 10,000.00 finance-manager threshold (P02), while each is "
+        f"below it. Finance must review them together.", "medium",
+        evidence=[_ev("invoice", i) for i in ids], policy_ids=["P01", "P02"],
+        data={"related_invoices": ids, "combined_cad_minor": total}, subject="|".join(ids))]
+
+
 def check_people(session: Session, version: InvoiceVersion) -> list[Result]:
     out: list[Result] = []
     if not version.department_id:
@@ -502,6 +592,8 @@ def run_checks(session: Session, version: InvoiceVersion, lines: list[InvoiceLin
     if version.document_type != "credit_note":
         results.extend(check_bank(session, version, vendor))
     results.extend(check_people(session, version))
+    if version.document_type != "credit_note":
+        results.extend(check_split_billing(session, version, lines))
     needs_coding = [ln.line_no for ln in lines if ln.coding_status == "NEEDS_REVIEW"]
     if needs_coding:
         results.append(Result("coding", "LOW_CODING_CONFIDENCE", "UNKNOWN", True,
