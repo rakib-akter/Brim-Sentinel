@@ -1,3 +1,5 @@
+import type { InvoiceSummary } from "@/lib/api/schema";
+
 /**
  * Typed domain models for Brim Sentinel (PRD v1.4).
  * They mirror what the FastAPI backend will return. Mock services implement the
@@ -23,6 +25,7 @@ export type InvoiceStatus =
   | "settled"
   | "failed"
   | "rejected"
+  | "cancelled"
   | "credit_recorded"
   | "non_payable";
 
@@ -43,7 +46,8 @@ export type FindingCode =
   | "NO_ELIGIBLE_RELEASER";
 
 export interface Finding {
-  code: FindingCode;
+  id?: string;
+  code: string;
   severity: RiskBand;
   /** Hard holds block payment until resolved by authorized people. */
   blocking: boolean;
@@ -55,13 +59,7 @@ export interface Finding {
 }
 
 export type RoleId =
-  | "requester"
-  | "ap_clerk"
-  | "dept_approver"
-  | "finance_manager"
-  | "controller"
-  | "cfo"
-  | "auditor";
+  "requester" | "ap_clerk" | "dept_approver" | "finance_manager" | "controller" | "cfo" | "auditor";
 
 export type ApprovalStepStatus = "approved" | "pending" | "waiting" | "rejected";
 
@@ -74,7 +72,7 @@ export interface ApprovalStep {
   rules: string[];
   status: ApprovalStepStatus;
   /** Set when a delegate acts for someone on leave (P08). */
-  actingFor?: string;
+  actingFor?: string | undefined;
   note?: string;
 }
 
@@ -97,22 +95,22 @@ export interface Invoice {
   totalMinor: number | null;
   subtotalMinor: number | null;
   taxes: { label: string; amountMinor: number }[];
-  currency: Currency;
+  currency: string | null;
   /** Stored FX rate to CAD at invoice date (USD only). */
-  fxToCad?: number;
+  fxToCad?: number | string | undefined;
   issueDate: string | null;
   dueDate: string | null;
   receivedAt: string;
   status: InvoiceStatus;
-  risk: RiskBand;
-  language: DocLanguage;
+  risk: RiskBand | null;
+  language: DocLanguage | null;
   scanned: boolean;
   channel: IntakeChannel;
   sourceRef: string;
   fileName: string | null;
   department: string;
   requesterId: string;
-  poNumber?: string;
+  poNumber?: string | undefined;
   suggestedGl?: { code: string; name: string; confidence: number };
   lineItems: LineItem[];
   findings: Finding[];
@@ -147,7 +145,7 @@ export type PrimaryActionKind =
   | "view_record";
 
 export interface PrimaryAction {
-  kind: PrimaryActionKind;
+  kind: string;
   label: string;
   /** Visual weight; exactly one primary action per task. */
   emphasis: "primary" | "secondary" | "quiet";
@@ -156,6 +154,7 @@ export interface PrimaryAction {
 
 /** A row on Home: one task, one plain-language status, one primary action. */
 export interface InvoiceTask {
+  record?: InvoiceSummary;
   invoice: Invoice;
   plainStatus: string;
   owner: string;
@@ -175,12 +174,7 @@ export interface HomeSummary {
 }
 
 export type InvoiceStatusFilter =
-  | "all"
-  | "attention"
-  | "processing"
-  | "approval"
-  | "payment"
-  | "done";
+  "all" | "attention" | "processing" | "approval" | "payment" | "done";
 
 export interface InvoiceListParams {
   q?: string;
@@ -204,6 +198,7 @@ export interface UploadInvoiceInput {
 export type CheckResult = "PASS" | "FAIL" | "UNKNOWN" | "NOT_APPLICABLE";
 
 export interface ValidationCheck {
+  id?: string;
   name: string;
   result: CheckResult;
   note: string;

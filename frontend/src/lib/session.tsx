@@ -1,34 +1,73 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { DEFAULT_USER_ID, findUser } from "@/lib/domain/roles";
+import { createContext, useContext, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { createIsomorphicFn } from "@tanstack/react-start";
+import { getCookie } from "@tanstack/react-start/server";
+import { identitiesQuery, meQuery } from "@/lib/api/queries";
+import { presentUser } from "@/lib/api/presentation";
 import type { User } from "@/lib/domain/types";
 
-/**
- * Demo identity — not authentication. The selected user is sent to the API as the
- * acting identity; the backend decides what that identity may see and do.
- */
+const COOKIE = "sentinel-demo-identity";
+const DEFAULT_ACTOR = "U004";
+const readIdentity = createIsomorphicFn()
+  .server(() => getCookie(COOKIE))
+  .client(() =>
+    document.cookie
+      .split("; ")
+      .find((entry) => entry.startsWith(COOKIE + "="))
+      ?.slice(COOKIE.length + 1),
+  );
+
+export function getDemoActor() {
+  const id = readIdentity();
+  return id && /^U\d{3}$/.test(id) ? id : DEFAULT_ACTOR;
+}
+
 interface SessionValue {
   user: User;
+  users: User[];
+  permissions: string[];
   setUserId: (id: string) => void;
+  identityError: string | undefined;
 }
 
 const SessionContext = createContext<SessionValue | null>(null);
-const STORAGE_KEY = "sentinel.demo-identity";
 
-export function SessionProvider({ children }: { children: ReactNode }) {
-  const [userId, setUserIdState] = useState(DEFAULT_USER_ID);
+export function SessionProvider({ actor, children }: { actor: string; children: ReactNode }) {
+  const me = useQuery(meQuery(actor));
+  const identities = useQuery(identitiesQuery());
+  const users = (identities.data?.users ?? [])
+    .filter((user) => user.kind === "human")
+    .map(presentUser);
+  const user = me.data
+    ? presentUser(me.data.user)
+    : {
+        id: actor,
+        name: actor,
+        title: "Demo identity",
+        role: "requester" as const,
+        department: "",
+        initials: "—",
+      };
 
-  useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored) setUserIdState(stored);
-  }, []);
+  function setUserId(id: string) {
+    if (id === actor || !users.some((candidate) => candidate.id === id)) return;
+    document.cookie = `${COOKIE}=${id}; Path=/; SameSite=Lax; Max-Age=2592000`;
+    window.location.reload();
+  }
 
-  const setUserId = useCallback((id: string) => {
-    setUserIdState(id);
-    window.localStorage.setItem(STORAGE_KEY, id);
-  }, []);
-
-  const value = useMemo(() => ({ user: findUser(userId), setUserId }), [userId, setUserId]);
-  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
+  return (
+    <SessionContext.Provider
+      value={{
+        user,
+        users,
+        permissions: me.data?.permissions ?? [],
+        setUserId,
+        identityError: (me.error ?? identities.error)?.message,
+      }}
+    >
+      {children}
+    </SessionContext.Provider>
+  );
 }
 
 export function useSession(): SessionValue {

@@ -1,9 +1,7 @@
-import type { Currency } from "@/lib/domain/types";
-
 /** Reference "today" for the prototype so server and browser render the same dates. */
 export const TODAY = "2026-11-21";
 
-export function formatMoney(minor: number | null, currency: Currency = "CAD"): string {
+export function formatMoney(minor: number | null, currency = "CAD"): string {
   if (minor === null) return "—";
   return new Intl.NumberFormat("en-CA", {
     style: "currency",
@@ -13,7 +11,10 @@ export function formatMoney(minor: number | null, currency: Currency = "CAD"): s
   }).format(minor / 100);
 }
 
-export function formatDate(iso: string | null, opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" }) {
+export function formatDate(
+  iso: string | null,
+  opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" },
+) {
   if (!iso) return "—";
   return new Intl.DateTimeFormat("en-CA", { ...opts, timeZone: "UTC" }).format(new Date(iso));
 }

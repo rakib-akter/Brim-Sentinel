@@ -1,7 +1,7 @@
 import { Suspense, useDeferredValue, useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { Inbox, Languages, Mail, Search, SearchX, Upload } from "lucide-react";
+import { Inbox, Mail, Search, SearchX, Upload } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/sentinel/empty-state";
@@ -9,7 +9,6 @@ import { InvoiceTable } from "@/components/sentinel/invoice-table";
 import { PageHeader } from "@/components/sentinel/page-header";
 import { UploadInvoiceDialog } from "@/components/sentinel/upload-invoice-dialog";
 import { invoicesQuery } from "@/lib/api/queries";
-import { DEFAULT_USER_ID } from "@/lib/domain/roles";
 import { STATUS_FILTERS, STATUS_FILTER_LABELS, inGroup } from "@/lib/domain/status-groups";
 import type { InvoiceStatusFilter } from "@/lib/domain/types";
 import { useSession } from "@/lib/session";
@@ -33,26 +32,38 @@ export const Route = createFileRoute("/invoices/")({
   head: () => ({
     meta: [
       { title: "Invoice Inbox — Brim Sentinel" },
-      { name: "description", content: "Every incoming invoice, credit note and supplier document, with its status and next action." },
+      {
+        name: "description",
+        content:
+          "Every incoming invoice, credit note and supplier document, with its status and next action.",
+      },
       { property: "og:title", content: "Invoice Inbox — Brim Sentinel" },
-      { property: "og:description", content: "Bilingual invoice intake with processing, review and hold states." },
+      {
+        property: "og:description",
+        content: "Bilingual invoice intake with processing, review and hold states.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(invoicesQuery(DEFAULT_USER_ID, {})),
+  loaderDeps: ({ search }) => ({ q: search.q }),
+  loader: async ({ context, deps }) => {
+    await context.queryClient.ensureQueryData(
+      invoicesQuery(context.actor, deps.q ? { q: deps.q } : {}),
+    );
+  },
   component: InboxPage,
 });
 
 function InboxPage() {
-  const { user } = useSession();
+  const { permissions } = useSession();
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Intake"
         title="Invoice Inbox"
         description="Invoices arrive from the AP mailbox or by upload. Sentinel reads them in English or French, checks them, and flags anything that needs a person."
-        actions={user.role === "auditor" ? null : <UploadInvoiceDialog />}
+        actions={permissions.includes("invoice.upload") ? <UploadInvoiceDialog /> : null}
       />
       <Suspense fallback={<Skeleton className="h-[520px] rounded-xl" />}>
         <InboxContent />
@@ -104,19 +115,17 @@ function InboxContent() {
 
   const fromEmail = all.data.filter((t) => t.invoice.channel === "email").length;
   const uploaded = all.data.length - fromEmail;
-  const french = all.data.filter((t) => t.invoice.language === "fr").length;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
-          <Mail className="size-3.5" aria-hidden /> <span className="figure font-medium text-foreground">{fromEmail}</span> from AP mailbox
+          <Mail className="size-3.5" aria-hidden />{" "}
+          <span className="figure font-medium text-foreground">{fromEmail}</span> from AP mailbox
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <Upload className="size-3.5" aria-hidden /> <span className="figure font-medium text-foreground">{uploaded}</span> uploaded
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <Languages className="size-3.5" aria-hidden /> <span className="figure font-medium text-foreground">{french}</span> in French
+          <Upload className="size-3.5" aria-hidden />{" "}
+          <span className="figure font-medium text-foreground">{uploaded}</span> uploaded
         </span>
       </div>
 
@@ -130,14 +139,25 @@ function InboxContent() {
                   key={f}
                   type="button"
                   aria-pressed={active}
-                  onClick={() => void navigate({ search: (s) => ({ ...s, status: f === "all" ? undefined : f }) })}
+                  onClick={() =>
+                    void navigate({
+                      search: (s) => ({ ...s, status: f === "all" ? undefined : f }),
+                    })
+                  }
                   className={cn(
                     "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:shadow-focus",
-                    active ? "bg-primary-soft text-accent-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                    active
+                      ? "bg-primary-soft text-accent-foreground"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground",
                   )}
                 >
                   {STATUS_FILTER_LABELS[f]}
-                  <span className={cn("figure text-xs", active ? "text-accent-foreground/80" : "text-muted-foreground/80")}>
+                  <span
+                    className={cn(
+                      "figure text-xs",
+                      active ? "text-accent-foreground/80" : "text-muted-foreground/80",
+                    )}
+                  >
                     {counts[f]}
                   </span>
                 </button>
@@ -145,7 +165,10 @@ function InboxContent() {
             })}
           </nav>
           <div className="relative w-full sm:w-72">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
             <Input
               aria-label="Search by supplier or invoice number"
               value={q}
@@ -158,7 +181,11 @@ function InboxContent() {
         {tasks.length ? (
           <InvoiceTable tasks={tasks} caption="Invoice inbox" />
         ) : search.q ? (
-          <EmptyState icon={SearchX} title={`No results for “${search.q}”`} body="Check the spelling or search by invoice number instead." />
+          <EmptyState
+            icon={SearchX}
+            title={`No results for “${search.q}”`}
+            body="Check the spelling or search by invoice number instead."
+          />
         ) : (
           <EmptyState
             icon={Inbox}

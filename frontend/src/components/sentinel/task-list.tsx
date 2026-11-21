@@ -40,7 +40,10 @@ export function TaskSection({
           <Icon className="size-4" aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
-          <h2 id={`${title}-heading`} className="flex items-center gap-2 text-[15px] font-semibold tracking-tight">
+          <h2
+            id={`${title}-heading`}
+            className="flex items-center gap-2 text-[15px] font-semibold tracking-tight"
+          >
             {title}
             <span className="figure rounded-full bg-secondary px-2 py-px text-xs font-medium text-muted-foreground">
               {count}
@@ -65,7 +68,7 @@ export function TaskRow({
   compact?: boolean;
 }) {
   const inv = task.invoice;
-  const date = dateLabel === "scheduled" ? inv.scheduledFor ?? null : inv.dueDate;
+  const date = dateLabel === "scheduled" ? (inv.scheduledFor ?? null) : inv.dueDate;
   const meta = `Owner: ${task.owner}${date ? ` · ${dateLabel === "scheduled" ? "Pays" : "Due"} ${formatDate(date)}` : ""}`;
   const title = (
     <div className="flex min-w-0 items-baseline gap-2">
@@ -76,20 +79,33 @@ export function TaskRow({
       >
         {inv.supplierName}
       </Link>
-      <span className="figure shrink-0 text-xs text-muted-foreground">{inv.number ? `#${inv.number}` : inv.id}</span>
+      <span className="figure shrink-0 text-xs text-muted-foreground">
+        {inv.number ? `#${inv.number}` : inv.id}
+      </span>
     </div>
   );
   const status = (
-    <p className={`mt-0.5 truncate text-[13px] ${STATUS_TEXT[inv.status] ?? "text-muted-foreground"}`}>{task.plainStatus}</p>
+    <p
+      className={`mt-0.5 truncate text-[13px] ${STATUS_TEXT[inv.status] ?? "text-muted-foreground"}`}
+    >
+      {task.plainStatus}
+    </p>
   );
 
   if (compact) {
     return (
       <li className="relative px-5 py-3.5 transition-colors hover:bg-secondary/60">
-        <span className={`absolute inset-y-3 left-0 w-[3px] rounded-r ${RAIL[inv.risk]}`} aria-hidden />
+        <span
+          className={`absolute inset-y-3 left-0 w-[3px] rounded-r ${inv.risk ? RAIL[inv.risk] : "bg-border"}`}
+          aria-hidden
+        />
         <div className="flex items-baseline justify-between gap-3">
           {title}
-          <Money minor={inv.totalMinor} currency={inv.currency} className="shrink-0 text-sm font-medium" />
+          <Money
+            minor={inv.totalMinor}
+            currency={inv.currency}
+            className="shrink-0 text-sm font-medium"
+          />
         </div>
         {status}
         <div className="mt-2 flex items-center justify-between gap-3">
@@ -102,7 +118,10 @@ export function TaskRow({
 
   return (
     <li className="relative flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-secondary/60">
-      <span className={`absolute inset-y-3 left-0 w-[3px] rounded-r ${RAIL[inv.risk]}`} aria-hidden />
+      <span
+        className={`absolute inset-y-3 left-0 w-[3px] rounded-r ${inv.risk ? RAIL[inv.risk] : "bg-border"}`}
+        aria-hidden
+      />
       <div className="min-w-0 flex-1">
         {title}
         {status}
