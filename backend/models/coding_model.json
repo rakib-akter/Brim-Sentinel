@@ -1,0 +1,16 @@
+{
+  "model_version": "tfidf_logreg_v1",
+  "artifact": "coding_model.joblib",
+  "sha256": "f9b061db45ab2f428b8548730c8e41eb36aca7b320a6006724cd92e30b261b67",
+  "sklearn_version": "1.9.1",
+  "trained_rows": 782,
+  "trained_through": "2026-10-24",
+  "training_data_sha256": {
+    "invoice_lines.csv": "6e2200ba2a1ab4e6a941608596756fb2913997615a51bfc0ffb9c4621c8463c1",
+    "invoices.csv": "398b86c61710c36240b52c88e2024707d9843e39d8994a93d3e118e9766cc678",
+    "vendors.csv": "4e35763eed91c509fab1959838c5bb5827fd1884e74b9842343ce298fa12536b"
+  },
+  "review_threshold": 0.7,
+  "holdout_metrics_file": "docs/eval/coding_model_metrics.json",
+  "note": "Shipped model is refit on all eligible history; quoted metrics are from the temporal holdout."
+}
