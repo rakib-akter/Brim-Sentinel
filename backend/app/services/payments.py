@@ -129,10 +129,8 @@ def prepare(session: Session, actor: User, inv: Invoice, *, expected_version: in
     v = pipeline.current_version(session, inv)
     route = _route_for(session, inv, method)
     users = pipeline.users_map(session)
-    approvers = {d.actor_id for d in pipeline.decisions(session, inv.id, v.version).values()}
     pmc = _active_change(session, inv)
-    excluded = approvers | {actor.id} | ({v.requester_id} if v.requester_id else set()) | (
-        {pmc.requested_by, pmc.decided_by} - {None} if pmc else set())
+    excluded = pipeline.release_exclusions(session, inv, v) | {actor.id}
     rel = approval_policy.eligible_releasers(v.amount_cad_minor or 0, users, excluded)
     if not rel:
         raise Unprocessable("NO_ELIGIBLE_RELEASER", "Nobody independent of the approvers and preparer holds release "

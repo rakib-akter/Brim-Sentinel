@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.common import ERRORS, visible_invoice
 from app.api.deps import get_actor, get_db
+from app.core.config import get_settings
 from app.core.errors import NotFound
 from app.core.permissions import require
 from app.db.models import Document, Invoice, User
@@ -58,7 +59,8 @@ async def upload(file: UploadFile = File(...), actor: User = Depends(get_actor),
                  db: Session = Depends(get_db)) -> dto.UploadOut:
     """Upload an unseen PDF/PNG invoice. Same pipeline as email intake; idempotent per (uploader, SHA-256)."""
     require(actor, "invoice.upload")
-    content = await file.read()
+    # Read at most limit + 1 bytes so an oversized body never lands in memory in full.
+    content = await file.read(get_settings().max_upload_bytes + 1)
     doc, created = intake.store_upload(db, actor=actor, filename=file.filename or "upload", content=content)
     inv = intake.find_invoice_for_document(db, doc.id)
     if inv is None:

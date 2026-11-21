@@ -101,15 +101,23 @@ EXPORT_COLUMNS = [
 ]
 
 
+def _cell(v: object) -> object:
+    """Neutralize spreadsheet formula injection (CWE-1236): text cells that begin with
+    = + - @ or a control character are prefixed with an apostrophe."""
+    if isinstance(v, str) and v and v[0] in "=+-@\t\r":
+        return "'" + v
+    return v
+
+
 def to_csv(events: list[AuditEvent]) -> str:
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(EXPORT_COLUMNS)
     for e in events:
-        w.writerow([
+        w.writerow([_cell(x) for x in [
             e.id, e.occurred_at.isoformat(), e.actor_id, e.actor_kind, e.action, e.object_type, e.object_id,
             e.object_version, e.invoice_id, e.result, e.before_state, e.after_state,
             json.dumps(e.policy_ids), json.dumps(e.evidence, default=str), json.dumps(e.details, default=str),
             e.prev_hash, e.hash,
-        ])
+        ]])
     return buf.getvalue()

@@ -291,7 +291,7 @@ def request_authorization(session: Session, actor: User, case: ResolutionCase, *
                             {"blocked_reasons": sorted(set(reasons))})
     steps = pipeline.step_statuses(session, inv.id, v.version)
     users = pipeline.users_map(session)
-    excluded = {s.assigned_actor_id for s, _, _ in steps if s.assigned_actor_id} | ({v.requester_id} if v.requester_id else set())
+    excluded = pipeline.release_exclusions(session, inv, v)
     data = {"approvers": [{"step": s.step_key, "assigned_actor_id": s.assigned_actor_id, "status": st,
                            "policy_ids": s.policy_ids} for s, st, _ in steps],
             "eligible_releasers": approval_policy.eligible_releasers(v.amount_cad_minor or 0, users, excluded),

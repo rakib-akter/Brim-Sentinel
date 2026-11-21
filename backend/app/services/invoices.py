@@ -245,8 +245,11 @@ def dismiss_finding(session: Session, actor: User, inv: Invoice, *, finding_id: 
     if not reason or len(reason.strip()) < 10:
         raise Unprocessable("REASON_REQUIRED", "A documented reason (≥ 10 characters) is required.")
     v = pipeline.current_version(session, inv)
-    if f.code in {"DUPLICATE_VENDOR_IDENTITY", "DUPLICATE_INVOICE"} and actor.id == v.requester_id:
+    if actor.id == v.requester_id:
         raise Forbidden("SELF_DISMISSAL_DENIED", "The requester cannot dismiss findings on their own invoice.")
+    if v.provenance == "manual" and actor.id == v.created_by:
+        raise Forbidden("MAKER_CANNOT_DISMISS", "You made the edits that created this version; another authorized "
+                        "person must review and dismiss findings on it (maker-checker).")
     subject = (f.data or {}).get("subject", "")
     session.add(FindingDismissal(invoice_id=inv.id, version=inv.current_version, code=f.code, subject=subject,
                                  actor_id=actor.id, reason=reason))

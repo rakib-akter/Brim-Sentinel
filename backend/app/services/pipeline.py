@@ -96,6 +96,31 @@ def step_statuses(session: Session, invoice_id: str, version: int) -> list[tuple
     return out
 
 
+def release_exclusions(session: Session, inv: Invoice, v: InvoiceVersion) -> set[str]:
+    """People who may not release this invoice version (segregation of duties): assigned and
+    actual approvers (P11), the requester, the author of a manual version (maker-checker), the
+    requester/authorizer of a payment-method change for this version, and whoever scheduled a
+    live payment."""
+    from app.db.models import PaymentMethodChange
+
+    out = {s.assigned_actor_id for s in approval_steps(session, inv.id, v.version) if s.assigned_actor_id}
+    out |= {d.actor_id for d in decisions(session, inv.id, v.version).values()}
+    if v.requester_id:
+        out.add(v.requester_id)
+    if v.provenance == "manual" and v.created_by:
+        out.add(v.created_by)
+    for c in session.scalars(select(PaymentMethodChange).where(
+            PaymentMethodChange.invoice_id == inv.id, PaymentMethodChange.invoice_version == v.version,
+            PaymentMethodChange.state == "AUTHORIZED")):
+        out |= {c.requested_by, c.decided_by} - {None}
+    for p in session.scalars(select(Payment).where(Payment.invoice_id == inv.id, Payment.invoice_version == v.version,
+                                                   Payment.source == "simulation",
+                                                   Payment.state.not_in({"CANCELLED", "FAILED"}))):
+        if p.prepared_by:
+            out.add(p.prepared_by)
+    return out
+
+
 def all_approved(session: Session, invoice_id: str, version: int) -> bool:
     st = step_statuses(session, invoice_id, version)
     return bool(st) and all(s == "APPROVED" for _, s, _ in st)
@@ -211,7 +236,7 @@ def _route(session: Session, inv: Invoice, v: InvoiceVersion, vendor, po_over: b
     chain = approval_policy.build_chain(
         v.amount_cad_minor, dept_manager_id=dept.manager_user_id if dept else None, requester_id=v.requester_id,
         vendor_status=vendor.status if vendor else None, vendor_category=vendor.category if vendor else None,
-        po_over_balance=po_over, users=users)
+        po_over_balance=po_over, users=users, maker_id=v.created_by if v.provenance == "manual" else None)
     for i, s in enumerate(chain.steps):
         session.add(ApprovalStep(id=f"AS-{inv.id}-v{v.version}-{s.step_key}", invoice_id=inv.id, version=v.version,
                                  step_index=i, step_key=s.step_key, required_role=s.required_role,
@@ -226,6 +251,8 @@ def _route(session: Session, inv: Invoice, v: InvoiceVersion, vendor, po_over: b
         excluded = {s.assigned_actor_id for s in chain.steps if s.assigned_actor_id}
         if v.requester_id:
             excluded.add(v.requester_id)
+        if v.provenance == "manual" and v.created_by:
+            excluded.add(v.created_by)  # maker-checker: the version author cannot release it either
         rel = approval_policy.eligible_releasers(v.amount_cad_minor, users, excluded)
         pol = ["P09", "P11"] if v.amount_cad_minor <= 100_000_00 else ["P10", "P11"]
         if not rel:

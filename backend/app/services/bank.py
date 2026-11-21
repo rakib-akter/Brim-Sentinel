@@ -75,8 +75,10 @@ def _revalidate_vendor_invoices(session: Session, vendor_id: str, actor: User | 
 def request_change(session: Session, actor: User, vendor: Vendor, *, institution: str, transit: str, account: str,
                    request_channel: str, evidence_ref: str | None) -> VendorBankChange:
     require(actor, "bank_change.request")
-    if not (institution.isdigit() and transit.isdigit() and account.isdigit()):
-        raise Unprocessable("BANK_DETAILS_INVALID", "Institution, transit and account must be digits.")
+    if not (institution.isdigit() and transit.isdigit() and account.isdigit()
+            and len(institution) == 3 and len(transit) == 5 and 5 <= len(account) <= 12):
+        raise Unprocessable("BANK_DETAILS_INVALID", "Institution (3 digits), transit (5 digits) and account "
+                            "(5–12 digits) are required.")
     n = (session.scalar(select(func.count()).select_from(VendorBankChange)) or 0) + 1
     route = PaymentRoute(id=f"RT-{vendor.id}-EFT-{n:03d}", vendor_id=vendor.id, method="EFT",
                          account_last4=account[-4:], account_fingerprint=account_fingerprint(institution, transit, account),

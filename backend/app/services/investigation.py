@@ -108,6 +108,10 @@ def find_related_invoices(s: Session, scope: dict, vendor_id: str) -> list[dict]
              "state": r[5]} for r in rows]
 
 
+def _like_escape(v: str) -> str:
+    return v.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def get_card_transactions(s: Session, scope: dict, vendor_id: str) -> list[dict]:
     if vendor_id != scope["vendor_id"]:
         raise Forbidden("OUT_OF_SCOPE", "Lookup outside the case scope.")
@@ -116,7 +120,8 @@ def get_card_transactions(s: Session, scope: dict, vendor_id: str) -> list[dict]
     return [{"txn_id": t.id, "posted_date": t.posted_date, "descriptor": t.merchant_descriptor,
              "amount": fmt(t.amount_minor, t.currency), "memo": t.memo,
              "note": "Descriptor match is a candidate, never proof of merchant ownership."}
-            for t in s.scalars(select(CardTransaction).where(CardTransaction.merchant_descriptor.like(f"%{key}%")))] if key else []
+            for t in s.scalars(select(CardTransaction).where(
+                CardTransaction.merchant_descriptor.like(f"%{_like_escape(key)}%", escape="\\")).limit(200))] if key else []
 
 
 def get_approval_history(s: Session, scope: dict, invoice_id: str) -> list[dict]:

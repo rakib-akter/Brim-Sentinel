@@ -93,7 +93,9 @@ def find_finance_manager(users: dict[str, UserLike]) -> UserLike | None:
 
 def build_chain(amount_cad_minor: int, *, dept_manager_id: str | None, requester_id: str | None,
                 vendor_status: str | None, vendor_category: str | None, po_over_balance: bool,
-                users: dict[str, UserLike]) -> ChainResult:
+                users: dict[str, UserLike], maker_id: str | None = None) -> ChainResult:
+    """`maker_id` is the person whose manual edit created this invoice version. Like the
+    requester (P07) they may not approve it (maker-checker); their step escalates to their manager."""
     steps = required_steps(amount_cad_minor, vendor_status=vendor_status, vendor_category=vendor_category,
                            po_over_balance=po_over_balance)
     blocking: list[dict] = []
@@ -119,7 +121,7 @@ def build_chain(amount_cad_minor: int, *, dept_manager_id: str | None, requester
         if not _active(candidate):
             return False
         assert candidate is not None
-        if candidate.id == requester_id or candidate.id in used:
+        if candidate.id in {requester_id, maker_id} - {None} or candidate.id in used:
             return False
         if candidate.approval_limit_minor < min(amount_cad_minor, step.authority_ceiling_minor):
             return False
@@ -161,6 +163,14 @@ def build_chain(amount_cad_minor: int, *, dept_manager_id: str | None, requester
             if "P07" not in step.policy_ids:
                 step.policy_ids.append("P07")
             reasons.append(f"{candidate.id} is the requester; self-approval not allowed (P07), escalating to manager.")
+            mgr = users.get(candidate.manager_id) if candidate.manager_id else None
+            if try_assign(step, mgr, " ".join(reasons)):
+                step.delegated_from_id = None
+                continue
+            candidate = None
+        if candidate is not None and maker_id and candidate.id == maker_id:
+            reasons.append(f"{candidate.id} made the edits that created this invoice version; maker-checker forbids "
+                           f"approving their own change, escalating to manager.")
             mgr = users.get(candidate.manager_id) if candidate.manager_id else None
             if try_assign(step, mgr, " ".join(reasons)):
                 step.delegated_from_id = None

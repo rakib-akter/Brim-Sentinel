@@ -242,9 +242,7 @@ def detail(ctx: Ctx, inv: Invoice) -> dto.InvoiceDetail:
         delegated_from_id=st.delegated_from_id, escalation_reason=st.escalation_reason, status=status,
         decided_by_id=d.actor_id if d else None, decided_at=d.decided_at if d else None,
         decision_reason=d.reason if d else None) for st, status, d in steps]
-    excluded = {st.assigned_actor_id for st, _, _ in steps if st.assigned_actor_id}
-    if v.requester_id:
-        excluded.add(v.requester_id)
+    excluded = pipeline.release_exclusions(s, inv, v)
     p = _live_payment(s, inv)
     if p and p.prepared_by:
         excluded.add(p.prepared_by)
