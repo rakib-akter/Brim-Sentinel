@@ -241,8 +241,16 @@ def test_callback_denial_keeps_hold(client):
 
 def test_at12_at44_card_route_requires_verified_route(client):
     approve(client, TRAILHEAD, "U007", "dept_manager")
+    # Trailhead invoices ask for EFT: paying by card needs an authorized method change first
+    # (see test_card_reroute.py for the full two-person flow).
     r = prepare(client, TRAILHEAD, method="CARD")
-    assert r.status_code == 422 and r.json()["error"]["code"] == "CARD_ROUTE_UNAVAILABLE"
+    assert r.status_code == 422 and r.json()["error"]["code"] == "METHOD_CHANGE_NOT_AUTHORIZED"
+    # ...and the method-change request itself is refused while no verified card route exists.
+    d = inv(client, TRAILHEAD)
+    r = client.post(f"/api/v1/invoices/{TRAILHEAD}/payment-method-changes", headers=H("U004"),
+                    json={"expected_version": d["version"], "to_method": "CARD",
+                          "reason": "Supplier asked to be paid by virtual card"})
+    assert r.status_code == 422 and "VERIFIED_CARD_ROUTE_UNAVAILABLE" in r.json()["error"]["details"]["failed_gates"]
 
 
 def test_at18_over_250k_no_eligible_releaser(client):

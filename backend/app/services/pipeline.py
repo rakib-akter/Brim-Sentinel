@@ -242,7 +242,8 @@ def _route(session: Session, inv: Invoice, v: InvoiceVersion, vendor, po_over: b
     return results
 
 
-def process(session: Session, inv: Invoice, *, actor: User | None, reason: str) -> list[ValidationFinding]:
+def process(session: Session, inv: Invoice, *, actor: User | None, reason: str,
+            cascade: bool = True) -> list[ValidationFinding]:
     v = current_version(session, inv)
     lines = version_lines(session, inv.id, v.version)
     scheduled = inv.lifecycle_state == lc.SCHEDULED
@@ -310,7 +311,25 @@ def process(session: Session, inv: Invoice, *, actor: User | None, reason: str) 
                           "fx_rate": v.fx_rate, "fx_date": v.fx_date},
                  evidence=[{"type": "finding", "ref": f.id} for f in findings if f.result in {"FAIL", "UNKNOWN"}])
     resolution.sync_cases(session, inv, v, findings, actor)
+    if cascade:
+        _cascade_split_billing(session, inv, findings, actor)
     return findings
+
+
+def _cascade_split_billing(session: Session, inv: Invoice, findings: list[ValidationFinding],
+                           actor: User | None) -> None:
+    """Split billing is a property of a group: when this invoice raises it, revalidate the other
+    members (which may have been processed before this invoice arrived) so all are held."""
+    split = next((f for f in findings if f.code == "SPLIT_BILLING_SUSPECTED" and f.blocking), None)
+    if split is None:
+        return
+    for rid in (split.data or {}).get("related_invoices", []):
+        other = session.get(Invoice, rid)
+        if other is None or other.lifecycle_state not in lc.REVALIDATABLE:
+            continue
+        if any(f.code == "SPLIT_BILLING_SUSPECTED" for f in latest_findings(session, other.id, other.current_version)):
+            continue
+        process(session, other, actor=actor, reason=f"related to possible split billing on {inv.id}", cascade=False)
 
 
 def _cancel_scheduled(session: Session, inv: Invoice, actor: User | None, why: str) -> None:

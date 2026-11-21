@@ -84,6 +84,8 @@ def new_version(session: Session, inv: Invoice, actor: User, *, reason: str, cha
     inv.row_version += 1
     session.flush()
     pipeline.cancel_scheduled_payments(session, inv, actor, f"material edit created version {nv.version}")
+    from app.services import card_routes
+    card_routes.supersede_for_new_version(session, inv, actor, nv.version)
     audit.record(session, actor=actor, action="invoice.version_created", object_type="invoice", object_id=inv.id,
                  object_version=nv.version, before=f"v{old.version}", after=f"v{nv.version}",
                  details={"reason": reason, "changed_fields": sorted(changes.keys()) + (["lines"] if line_changes else [])

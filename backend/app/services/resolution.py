@@ -86,10 +86,16 @@ def sync_cases(session: Session, inv: Invoice, v: InvoiceVersion, findings: list
         if code in by_code:
             continue
         dismissed = next((f for f in findings if f.code == code and f.dismissed_by), None)
+        rerouted = next((f for f in findings if f.code == code and not f.blocking
+                         and (f.data or {}).get("superseded_by_method_change")), None)
         before = case.state
         case.state = "RESOLVED"
-        case.closure_outcome = (f"Dismissed by {dismissed.dismissed_by}: {dismissed.dismissal_reason}" if dismissed else
-                                f"Deterministic revalidation of version {v.version} no longer finds {code}.")
+        case.closure_outcome = (
+            f"Dismissed by {dismissed.dismissed_by}: {dismissed.dismissal_reason}" if dismissed else
+            f"Version {v.version} will be paid by the verified virtual-card route under method change "
+            f"{rerouted.data['superseded_by_method_change']}; the bank change itself remains unverified and EFT stays "
+            f"blocked." if rerouted else
+            f"Deterministic revalidation of version {v.version} no longer finds {code}.")
         case.row_version += 1
         audit.record(session, actor=actor, action="case.resolved", object_type="case", object_id=case.id,
                      object_version=v.version, invoice_id=inv.id, before=before, after="RESOLVED",

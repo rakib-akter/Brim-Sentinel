@@ -18,6 +18,7 @@ from app.db.models import (
     IdempotencyRecord,
     Invoice,
     Payment,
+    PaymentMethodChange,
     PaymentRoute,
     User,
     VendorBankChange,
@@ -34,10 +35,33 @@ def get_payment(session: Session, payment_id: str) -> Payment:
     return p
 
 
+def _active_change(session: Session, inv: Invoice) -> PaymentMethodChange | None:
+    return session.scalar(select(PaymentMethodChange).where(
+        PaymentMethodChange.invoice_id == inv.id, PaymentMethodChange.invoice_version == inv.current_version,
+        PaymentMethodChange.state == "AUTHORIZED"))
+
+
 def _route_for(session: Session, inv: Invoice, method: str | None) -> PaymentRoute:
     v = pipeline.current_version(session, inv)
     remit = v.remit or {}
-    method = method or remit.get("method") or "EFT"
+    pmc = _active_change(session, inv)
+    if pmc is not None:
+        # An authorized EFT → CARD change binds this version to that exact verified card route.
+        if method not in {None, "CARD"}:
+            raise Unprocessable("METHOD_CHANGE_REQUIRES_CARD", f"Method change {pmc.id} was authorized for this "
+                                "version; it can only be paid through the verified card route.",
+                                {"method_change_id": pmc.id})
+        route = session.get(PaymentRoute, pmc.route_id)
+        if route is None or route.status != "VERIFIED":
+            raise Unprocessable("CARD_ROUTE_UNAVAILABLE", "The authorized card route is no longer verified.")
+        return route
+    invoice_method = remit.get("method") or "EFT"
+    if method is not None and method != invoice_method:
+        raise Unprocessable("METHOD_CHANGE_NOT_AUTHORIZED",
+                            f"The invoice asks for {invoice_method}. Paying by {method} requires an authorized "
+                            "payment-method change for this invoice version (finance manager, two-person control).",
+                            {"invoice_method": invoice_method, "requested_method": method})
+    method = invoice_method
     if method == "EFT":
         fp = remit.get("account_fingerprint")
         route = session.scalar(select(PaymentRoute).where(PaymentRoute.vendor_id == inv.vendor_id,
@@ -68,7 +92,9 @@ def _route_for(session: Session, inv: Invoice, method: str | None) -> PaymentRou
 
 
 def _live_gates(session: Session, inv: Invoice, *, expected_version: int) -> list[str]:
-    """Re-read every hard gate. Returns blocked reasons (empty == clear)."""
+    """Re-read every hard gate. Returns blocked reasons (empty == clear). An open bank change
+    blocks every payment of the vendor unless this exact version was authorized to be paid by
+    the verified card route (then EFT is not used at all)."""
     reasons = []
     v = pipeline.current_version(session, inv)
     if expected_version != v.version:
@@ -80,8 +106,11 @@ def _live_gates(session: Session, inv: Invoice, *, expected_version: int) -> lis
         reasons.append(f"{f.code}: {f.title}")
     open_bc = session.scalars(select(VendorBankChange).where(VendorBankChange.vendor_id == inv.vendor_id,
                                                              VendorBankChange.state.in_(OPEN_BANK_CHANGE_STATES))).all()
+    pmc = _active_change(session, inv)
+    card_ok = pmc is not None and (r := session.get(PaymentRoute, pmc.route_id)) is not None and r.status == "VERIFIED"
     for bc in open_bc:
-        reasons.append(f"BANK_CHANGE_UNVERIFIED: bank change {bc.id} is {bc.state}")
+        if not card_ok:
+            reasons.append(f"BANK_CHANGE_UNVERIFIED: bank change {bc.id} is {bc.state}")
     if not pipeline.all_approved(session, inv.id, v.version):
         reasons.append("Required approvals for the current version are incomplete.")
     return sorted(set(reasons))
@@ -101,7 +130,9 @@ def prepare(session: Session, actor: User, inv: Invoice, *, expected_version: in
     route = _route_for(session, inv, method)
     users = pipeline.users_map(session)
     approvers = {d.actor_id for d in pipeline.decisions(session, inv.id, v.version).values()}
-    excluded = approvers | {actor.id} | ({v.requester_id} if v.requester_id else set())
+    pmc = _active_change(session, inv)
+    excluded = approvers | {actor.id} | ({v.requester_id} if v.requester_id else set()) | (
+        {pmc.requested_by, pmc.decided_by} - {None} if pmc else set())
     rel = approval_policy.eligible_releasers(v.amount_cad_minor or 0, users, excluded)
     if not rel:
         raise Unprocessable("NO_ELIGIBLE_RELEASER", "Nobody independent of the approvers and preparer holds release "
@@ -118,7 +149,8 @@ def prepare(session: Session, actor: User, inv: Invoice, *, expected_version: in
                  object_version=v.version, invoice_id=inv.id, after="SCHEDULED",
                  policy_ids=["P09"] if p.amount_cad_minor <= 100_000_00 else ["P10"],
                  evidence=[{"type": "payment_route", "ref": route.id, "provenance": route.provenance}],
-                 details={"simulation": True, "eligible_releasers": rel, "method": route.method})
+                 details={"simulation": True, "eligible_releasers": rel, "method": route.method,
+                          "method_change_id": pmc.id if pmc else None})
     return p
 
 
@@ -162,6 +194,11 @@ def release(session: Session, actor: User, payment_id: str, *, idempotency_key: 
     route = session.get(PaymentRoute, p.route_id) if p.route_id else None
     if route is None or route.status != "VERIFIED":
         blocked.append("Payment route is not verified.")
+    pmc = _active_change(session, inv)
+    if pmc is not None and p.route_id != pmc.route_id:
+        blocked.append(f"Payment route differs from the route authorized by {pmc.id}.")
+    if pmc is None and route is not None and route.method != ((v.remit or {}).get("method") or "EFT"):
+        blocked.append("Payment method differs from the invoice and no method change is authorized.")
     if blocked:
         raise Unprocessable("HOLDS_UNRESOLVED", "Release blocked; payment stays held.", {"blocked_reasons": blocked})
     roles = approval_policy.release_authority_roles(p.amount_cad_minor)
@@ -178,6 +215,12 @@ def release(session: Session, actor: User, payment_id: str, *, idempotency_key: 
         raise Forbidden("REQUESTER_CANNOT_RELEASE", "The requester cannot release their own invoice.")
     if actor.id == p.prepared_by:
         raise Forbidden("PREPARER_CANNOT_RELEASE", "The person who scheduled the payment cannot release it.")
+    if pmc is not None and actor.id in {pmc.requested_by, pmc.decided_by}:
+        raise Forbidden("METHOD_CHANGE_PARTY_CANNOT_RELEASE", f"You requested or authorized method change {pmc.id}; "
+                        "an independent person must release this payment.", {"method_change_id": pmc.id})
+    if actor.id == v.created_by and v.provenance == "manual":
+        raise Forbidden("VERSION_AUTHOR_CANNOT_RELEASE", "You made the edits that created this invoice version; an "
+                        "independent person must release it (maker-checker).")
     p.state = "RELEASED"
     p.released_by = actor.id
     p.released_at = utcnow()

@@ -13,7 +13,7 @@ from app.core.errors import NotFound
 from app.core.permissions import require
 from app.db.models import Document, Invoice, User
 from app.schemas import dto
-from app.services import approvals, intake, invoices as inv_svc, pipeline, views
+from app.services import approvals, card_routes, intake, invoices as inv_svc, pipeline, views
 
 router = APIRouter(prefix="/api/v1/invoices", tags=["invoices"], responses=ERRORS)
 
@@ -165,3 +165,40 @@ def decide(invoice_id: str, step_key: str, body: dto.ApprovalDecisionRequest, ac
     approvals.decide(db, actor, inv, step_key=step_key, expected_version=body.expected_version,
                      decision=body.decision, reason=body.reason)
     return _after(db, actor, inv)
+
+
+# ------------------------------------------------------------------ payment-method change (§6.2)
+@router.get("/{invoice_id}/payment-method-changes", response_model=list[dto.MethodChangeOut], tags=["payments"])
+def list_method_changes(invoice_id: str, actor: User = Depends(get_actor),
+                        db: Session = Depends(get_db)) -> list[dto.MethodChangeOut]:
+    ctx, inv = visible_invoice(db, actor, invoice_id)
+    return [views.method_change_out(ctx, c) for c in card_routes.changes_for(db, inv.id)]
+
+
+@router.post("/{invoice_id}/payment-method-changes", response_model=dto.MethodChangeOut, tags=["payments"])
+def request_method_change(invoice_id: str, body: dto.MethodChangeCreate, actor: User = Depends(get_actor),
+                          db: Session = Depends(get_db)) -> dto.MethodChangeOut:
+    """Request EFT → simulated Brim virtual card for the current invoice version. Requires vendor
+    card acceptance and an independently VERIFIED card route. A request is not an authorization."""
+    _ctx, inv = visible_invoice(db, actor, invoice_id)
+    c = card_routes.request_change(db, actor, inv, expected_version=body.expected_version, to_method=body.to_method,
+                                   reason=body.reason)
+    db.commit()
+    return views.method_change_out(views.Ctx(db, actor), c)
+
+
+@router.post("/{invoice_id}/payment-method-changes/{change_id}/decision", response_model=dto.MethodChangeOut,
+             tags=["payments"])
+def decide_method_change(invoice_id: str, change_id: str, body: dto.MethodChangeDecisionRequest,
+                         actor: User = Depends(get_actor), db: Session = Depends(get_db)) -> dto.MethodChangeOut:
+    """Finance-manager authorization (or decline) of a method change. The authorizer must differ from
+    the requester, the invoice requester and the card-route registrant/verifier; on authorization the
+    invoice is revalidated. Never approves the invoice or releases funds."""
+    _ctx, inv = visible_invoice(db, actor, invoice_id)
+    c = card_routes.get_change(db, change_id)
+    if c.invoice_id != inv.id:
+        raise NotFound("METHOD_CHANGE_NOT_FOUND", f"Payment-method change {change_id} not found on {inv.id}.")
+    card_routes.decide_change(db, actor, c, decision=body.decision, notes=body.notes,
+                              expected_row_version=body.expected_row_version)
+    db.commit()
+    return views.method_change_out(views.Ctx(db, actor), c)

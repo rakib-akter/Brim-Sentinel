@@ -547,3 +547,65 @@ class OnboardRequest(Strict):
 
 class ActivateRequest(Strict):
     notes: str
+
+
+# ------------------------------------------------------------------ virtual-card rerouting (§6.2)
+class CardRouteCreate(Strict):
+    merchant_reference: str = Field(..., description="Merchant reference supplied by the vendor in writing. Never "
+                                    "derived from a card-transaction descriptor.")
+    evidence_ref: str
+    notes: str
+
+
+class CardRouteVerificationRequest(VerificationRequest):
+    """Independent callback to a trusted contact on file before the route was registered."""
+
+
+class CardRouteOut(BaseModel):
+    id: str
+    vendor_id: str
+    method: Literal["CARD"]
+    status: str
+    merchant_reference_masked: str | None
+    provenance: str
+    registered_by: str | None
+    registered_at: str | None
+    verified_by: str | None
+    verified_at: str | None
+    verification: dict[str, Any]
+    row_version: int
+    simulated: bool = True
+    allowed_actions: list[str]
+
+
+class MethodChangeCreate(VersionedRequest):
+    to_method: Literal["CARD"] = "CARD"
+    reason: str
+
+
+class MethodChangeDecisionRequest(Strict):
+    expected_row_version: int | None = None
+    decision: Literal["AUTHORIZED", "DECLINED"]
+    notes: str
+
+
+class MethodChangeOut(BaseModel):
+    id: str
+    invoice_id: str
+    invoice_version: int
+    vendor_id: str
+    from_method: str
+    to_method: str
+    route_id: str
+    state: str
+    requested_by: str
+    requested_at: str
+    reason: str
+    gate_snapshot: dict[str, Any]
+    supporting_card_history: dict[str, Any]
+    decided_by: str | None
+    decided_at: str | None
+    decision_notes: str | None
+    row_version: int
+    applies_to_current_version: bool
+    allowed_actions: list[str]
