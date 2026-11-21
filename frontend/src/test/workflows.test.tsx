@@ -163,7 +163,7 @@ describe("Invoice workflow controls", () => {
       ],
     });
     renderWorkflow(<FlightRecorder invoiceId="IN-TEST" />);
-    fireEvent.click(screen.getByRole("button", { name: "Financial Flight Recorder" }));
+    fireEvent.click(screen.getByRole("button", { name: "See payment journey" }));
     const event = await screen.findByText("Case opened");
     const proposal = screen.getByText("Verify supplier");
     expect(event.closest("ol")).not.toBeNull();

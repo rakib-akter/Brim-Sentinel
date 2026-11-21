@@ -48,9 +48,11 @@ export function UploadInvoiceDialog({ trigger }: { trigger?: React.ReactNode }) 
   const upload = useMutation({
     mutationFn: async () => {
       let completed = 0;
+      let created = 0;
       for (const file of files) {
         try {
-          await api.upload(user.id, file);
+          const result = await api.upload(user.id, file);
+          if (result.created) created++;
           completed++;
         } catch (error) {
           setFiles(files.slice(completed));
@@ -59,7 +61,7 @@ export function UploadInvoiceDialog({ trigger }: { trigger?: React.ReactNode }) 
           );
         }
       }
-      return completed;
+      return { completed, created };
     },
     onSettled: async () => {
       await Promise.all([
@@ -67,10 +69,18 @@ export function UploadInvoiceDialog({ trigger }: { trigger?: React.ReactNode }) 
         qc.invalidateQueries({ queryKey: ["home"] }),
       ]);
     },
-    onSuccess: (completed) => {
-      toast.success(`${completed} ${completed === 1 ? "document" : "documents"} uploaded`, {
-        description: "Review the stored invoice and its checks in the inbox.",
-      });
+    onSuccess: ({ completed, created }) => {
+      const reused = completed - created;
+      toast.success(
+        created
+          ? `${created} ${created === 1 ? "draft" : "drafts"} created`
+          : "Invoices already in the inbox",
+        {
+          description: reused
+            ? `${reused} ${reused === 1 ? "file was" : "files were"} already received.`
+            : "Review the invoices and their checks in the inbox.",
+        },
+      );
       setFiles([]);
       setOpen(false);
     },
@@ -128,6 +138,7 @@ export function UploadInvoiceDialog({ trigger }: { trigger?: React.ReactNode }) 
           <p className="mt-0.5 text-xs text-muted-foreground">PDF, PNG or JPG · up to 10 MB each</p>
           <Button
             variant="outline"
+            disabled={upload.isPending}
             size="sm"
             className="mt-4"
             onClick={() => inputRef.current?.click()}
@@ -166,6 +177,7 @@ export function UploadInvoiceDialog({ trigger }: { trigger?: React.ReactNode }) 
                 </span>
                 <button
                   type="button"
+                  disabled={upload.isPending}
                   aria-label={`Remove ${f.name}`}
                   onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
                   className="rounded p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
@@ -177,7 +189,7 @@ export function UploadInvoiceDialog({ trigger }: { trigger?: React.ReactNode }) 
           </ul>
         ) : null}
         <DialogFooter>
-          <Button variant="ghost" onClick={() => setOpen(false)}>
+          <Button variant="ghost" disabled={upload.isPending} onClick={() => setOpen(false)}>
             Cancel
           </Button>
           <Button disabled={!files.length || upload.isPending} onClick={() => upload.mutate()}>

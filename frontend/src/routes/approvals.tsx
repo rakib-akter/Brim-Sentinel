@@ -4,7 +4,7 @@ import { CheckSquare } from "lucide-react";
 import { EmptyState } from "@/components/sentinel/empty-state";
 import { InvoiceTable } from "@/components/sentinel/invoice-table";
 import { PageHeader } from "@/components/sentinel/page-header";
-import { errorMessage } from "@/components/sentinel/workflow-form";
+import { QueryState } from "@/components/sentinel/query-state";
 import { invoicesQuery } from "@/lib/api/queries";
 import { useSession } from "@/lib/session";
 
@@ -29,10 +29,10 @@ function Approvals() {
         title="Approvals"
         description="Review pending decisions and follow the approval chain on each invoice."
       />
-      {result.error ? (
-        <p role="alert">{errorMessage(result.error)}</p>
-      ) : result.isPending ? (
-        <p role="status">Loading approvals…</p>
+      {result.error || result.isPending ? (
+        <div className="surface">
+          <QueryState error={result.error} loading="Loading approvals…" retry={result.refetch} />
+        </div>
       ) : (
         <>
           <section className="surface overflow-hidden">

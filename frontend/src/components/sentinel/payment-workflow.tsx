@@ -49,12 +49,18 @@ export function PaymentWorkflow({ invoice }: { invoice: InvoiceDetail }) {
             });
           }}
         >
-          <Choice
-            name="method"
-            label="Payment method (optional, defaults to the invoice route)"
-            required={false}
-            options={["EFT", "CARD", "CHEQUE"].map((method) => ({ value: method, label: method }))}
-          />
+          <details className="text-sm">
+            <summary className="cursor-pointer font-medium">Payment route options</summary>
+            <Choice
+              name="method"
+              label="Payment method (optional, defaults to the invoice route)"
+              required={false}
+              options={["EFT", "CARD", "CHEQUE"].map((method) => ({
+                value: method,
+                label: method,
+              }))}
+            />
+          </details>
         </WorkflowForm>
       )}
       {payment?.simulation && allowed.includes("release_payment") && (

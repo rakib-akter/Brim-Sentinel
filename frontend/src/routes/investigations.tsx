@@ -2,7 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/sentinel/page-header";
 import { ResolutionCase } from "@/components/sentinel/resolution-case";
-import { errorMessage, humanize } from "@/components/sentinel/workflow-form";
+import { QueryState } from "@/components/sentinel/query-state";
+import { humanize } from "@/components/sentinel/workflow-form";
 import { caseQuery, casesQuery } from "@/lib/api/queries";
 import { useSession } from "@/lib/session";
 
@@ -47,15 +48,8 @@ function Investigations() {
             {search.history ? "Open cases only" : "Include case history"}
           </Link>
         </div>
-        {cases.error && (
-          <p className="p-5" role="alert">
-            {errorMessage(cases.error)}
-          </p>
-        )}
-        {cases.isPending && (
-          <p className="p-5" role="status">
-            Loading cases…
-          </p>
+        {(cases.error || cases.isPending) && (
+          <QueryState error={cases.error} loading="Loading cases…" retry={cases.refetch} />
         )}
         {cases.data?.items.length === 0 && (
           <p className="p-5 text-sm text-muted-foreground">No cases in this view.</p>

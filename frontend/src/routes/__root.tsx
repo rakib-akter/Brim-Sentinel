@@ -53,8 +53,7 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
           This page didn't load
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. No financial records were changed. You can try again or
-          head back home.
+          Try loading the page again or return home to check the latest records.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button

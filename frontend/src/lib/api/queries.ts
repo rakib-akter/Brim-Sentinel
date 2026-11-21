@@ -31,9 +31,18 @@ export const homeQuery = (actorId: string) =>
     },
   });
 
-export const invoicesQuery = (actorId: string, params: InvoiceListParams) =>
+export const invoicesQuery = (
+  actorId: string,
+  params: InvoiceListParams & { includeHistory?: boolean },
+) =>
   queryOptions({
-    queryKey: ["invoices", actorId, params.q ?? "", params.status ?? "all"],
+    queryKey: [
+      "invoices",
+      actorId,
+      params.q ?? "",
+      params.status ?? "all",
+      params.includeHistory ?? false,
+    ],
     queryFn: async () => (await api.invoices(actorId, params)).map(presentInvoice),
   });
 
@@ -63,3 +72,12 @@ export const paymentsQuery = (actor: string, state: string) =>
   queryOptions({ queryKey: ["payments", actor, state], queryFn: () => api.payments(actor, state) });
 export const flightQuery = (actor: string, id: string) =>
   queryOptions({ queryKey: ["flight", actor, id], queryFn: () => api.flight(actor, id) });
+
+export const vendorsQuery = (actor: string, q: string, status: string) =>
+  queryOptions({
+    queryKey: ["vendors", actor, q, status],
+    queryFn: () => api.vendors(actor, q, status),
+  });
+
+export const vendorQuery = (actor: string, id: string) =>
+  queryOptions({ queryKey: ["vendor", actor, id], queryFn: () => api.vendor(actor, id) });

@@ -4,7 +4,8 @@ import { useState } from "react";
 import { InvoiceTable } from "@/components/sentinel/invoice-table";
 import { PageHeader } from "@/components/sentinel/page-header";
 import { PaymentRecord } from "@/components/sentinel/payment-workflow";
-import { errorMessage, humanize } from "@/components/sentinel/workflow-form";
+import { QueryState } from "@/components/sentinel/query-state";
+import { humanize } from "@/components/sentinel/workflow-form";
 import { invoicesQuery, paymentsQuery } from "@/lib/api/queries";
 import { useSession } from "@/lib/session";
 
@@ -53,15 +54,12 @@ function Payments() {
             </select>
           </label>
         </div>
-        {payments.error && (
-          <p className="p-5" role="alert">
-            {errorMessage(payments.error)}
-          </p>
-        )}
-        {payments.isPending && (
-          <p className="p-5" role="status">
-            Loading payment records…
-          </p>
+        {(payments.error || payments.isPending) && (
+          <QueryState
+            error={payments.error}
+            loading="Loading payment records…"
+            retry={payments.refetch}
+          />
         )}
         {payments.data?.length === 0 && (
           <p className="p-5 text-sm text-muted-foreground">No payment records match this view.</p>
@@ -85,7 +83,15 @@ function Payments() {
           ))}
         </ul>
       </section>
-      {invoices.error && <p role="alert">{errorMessage(invoices.error)}</p>}
+      {(invoices.error || invoices.isPending) && (
+        <div className="surface">
+          <QueryState
+            error={invoices.error}
+            loading="Loading invoices for payment…"
+            retry={invoices.refetch}
+          />
+        </div>
+      )}
       {pending.length > 0 && (
         <section className="surface overflow-hidden">
           <h2 className="border-b px-5 py-3 font-semibold">Held and ready to schedule</h2>

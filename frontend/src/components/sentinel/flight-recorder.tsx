@@ -24,7 +24,7 @@ export function FlightRecorder({ invoiceId }: { invoiceId: string }) {
   return (
     <Collapsible className="surface px-5 py-4">
       <CollapsibleTrigger className="text-sm font-semibold text-primary">
-        Financial Flight Recorder
+        See payment journey
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-4 space-y-4">
         {error && <p role="alert">{errorMessage(error)}</p>}
@@ -48,7 +48,12 @@ export function FlightRecorder({ invoiceId }: { invoiceId: string }) {
                     </p>
                   )}
                   {event.policy_ids.length > 0 && <p>Policy {event.policy_ids.join(", ")}</p>}
-                  <Evidence items={event.evidence_refs} />
+                  {event.evidence_refs.length > 0 && (
+                    <details>
+                      <summary className="cursor-pointer text-primary">See evidence</summary>
+                      <Evidence items={event.evidence_refs} />
+                    </details>
+                  )}
                 </li>
               ))}
             </ol>
