@@ -1,0 +1,49 @@
+Cascadia Cartage Ltd.
+7313 Rue Sainte-Catherine
+Surrey BC V5K 5N1
+GST/HST 669086667RT0001
+INVOICE
+Invoice #: 1624
+Date: 2026-10-24
+Due date: 2026-11-23
+Terms: Net 30
+Bill to
+Harborline Logistics Inc.
+1250 Rene-Levesque O, Bureau 2200, Montreal QC H3B 4W8
+GST/HST 100000001RT0001
+Description
+Qty
+Unit price
+Amount
+LTL shipment Calgary-Edmonton
+1
+$1,682.26
+$1,682.26
+LTL shipment Calgary-Edmonton
+1
+$1,551.94
+$1,551.94
+LTL shipment Regina-Ottawa
+1
+$969.77
+$969.77
+LTL shipment Calgary-Regina
+1
+$1,233.47
+$1,233.47
+Fuel surcharge (7.07%)
+1
+$384.43
+$384.43
+Subtotal
+$5,821.87
+GST (5%)
+$291.09
+QST (9.975%)
+$580.73
+Total CAD
+$6,693.69
+Remit to
+Inst. 003   Transit 92968   Acct 953389679
+EFT / virement bancaire - Cascadia Cartage Ltd.
+Thank you for your business.
