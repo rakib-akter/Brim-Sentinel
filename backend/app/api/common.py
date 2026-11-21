@@ -7,7 +7,7 @@ from app.db.models import Invoice, User
 from app.schemas.dto import ErrorResponse
 from app.services import views
 
-ERRORS = {s: {"model": ErrorResponse} for s in (401, 403, 404, 409, 422)}
+ERRORS = {s: {"model": ErrorResponse} for s in (401, 403, 404, 409, 422, 429)}
 
 
 def visible_invoice(db: Session, actor: User, invoice_id: str) -> tuple[views.Ctx, Invoice]:

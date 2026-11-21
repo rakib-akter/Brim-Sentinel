@@ -31,11 +31,18 @@ ROUND_HALF_UP). "Over" means strictly greater than (CAD 10,000.00 → P01 only; 
 * Terminated users (U015) are never assigned and cannot act; the department manager owns rework.
 * AI/service identities (`SVC-SENTINEL`) have no permissions at all.
 
+### Maker-checker on manual versions
+
+The person whose manual edit (fields, lines, coding override) created the current invoice version is
+excluded from that version's chain — their step escalates to their manager exactly like P07 — and may
+not dismiss findings on it or release it. The requester may not dismiss any finding on their own invoice.
+
 ## Release (P09–P11)
 
 * ≤ CAD 100,000: `finance_manager` or a non-approving `controller_admin`; > CAD 100,000: `controller_admin`.
-* The releaser must not have approved the version (P11), must not be the requester, and must not be
-  the person who scheduled the payment.
+* The releaser must not have approved the version (P11), must not be the requester, must not be
+  the person who scheduled the payment, the author of a manual version, or the requester/authorizer of
+  a payment-method change for the version (single helper: `pipeline.release_exclusions`).
 * Predictive check at routing time: if every holder of release authority is in the chain →
   `NO_ELIGIBLE_RELEASER` hard hold + case owned by the controller. Documented decision options are
   `reject_invoice` or `keep_on_hold`; **there is no release override.** (>250k always lands here;
@@ -60,10 +67,13 @@ Stale `expected_version` → 409 `INVOICE_VERSION_CONFLICT` with no side effects
 `FX_RATE_MISSING`, `DUE_BEFORE_INVOICE_DATE`, `PO_MISSING`, `PO_NOT_FOUND/VENDOR_MISMATCH/CLOSED`,
 `BANK_CHANGE_UNVERIFIED`, `BANK_DETAILS_MISMATCH`, `PAYMENT_ROUTE_UNAVAILABLE`, `DEPARTMENT_UNASSIGNED`,
 `LOW_CODING_CONFIDENCE` (cleared by a coding decision), `NO_ELIGIBLE_APPROVER`, `NO_ELIGIBLE_RELEASER`.
+OCR values below `OCR_MIN_CONFIDENCE` are left blank and listed as uncertain, so the relevant
+hard hold (`EXTRACTION_INCOMPLETE`, `PAYMENT_ROUTE_UNAVAILABLE`, …) applies instead of a guess.
 
 Dismissible by finance_manager/controller with a ≥10-char reason (per version; audited; never clears
 another hold): duplicate candidates/card-paid/confirmed duplicate, look-alike vendor identity,
-contract rate/fuel/cap/expiry exceptions, future-dated invoice, prompt-injection text, tax-unverifiable.
+contract rate/fuel/cap/expiry exceptions, future-dated invoice, prompt-injection text, tax-unverifiable,
+split billing.
 
 ## Bank changes (FR-09, wizard)
 
@@ -76,6 +86,33 @@ change, method, time, notes and an evidence reference. Unknown request fields (e
 are rejected with 422. Route authorization is a second person (finance_manager/controller, not the
 verifier or requester); it marks the route VERIFIED with full provenance and revalidates the vendor's
 open invoices. A `DENIED` callback rejects the change and revokes the route; the hold remains.
+
+## Virtual-card rerouting (PRD §6.2, simulated)
+
+1. **Card route.** A human registers a CARD route for a vendor whose master says it accepts card, with a
+   merchant reference supplied by the vendor (letters/digits only; never copied from a card descriptor).
+   It is `UNVERIFIED` until a *different* person records an independent callback to a vendor-master
+   contact established before the registration (method, time, notes, evidence). `DENIED` revokes it.
+2. **Method change** (`POST /invoices/{id}/payment-method-changes`): EFT → CARD for the current
+   version only. Gates: payable invoice, state ON_HOLD/PENDING_APPROVAL/APPROVED, vendor active and
+   accepts card, a VERIFIED card route. Recent Brim card charges matching the vendor are attached as
+   supporting evidence and never as proof.
+3. **Authorization**: finance_manager only, and not the requester, the invoice requester, the route
+   registrant or the route verifier. Gates are re-checked; on authorization the invoice is revalidated.
+4. While an AUTHORIZED change is bound to the current version and its route is still VERIFIED, the
+   payment-route check passes on the card route, an open bank change is reported but **non-blocking for
+   that version**, and payments for it can only use that route. EFT to the changed account stays blocked
+   for every other invoice. A material edit supersedes the change and the hold returns.
+5. Approvals (all steps for the version) and an independent releaser are still required. Without an
+   authorized change, scheduling a method different from the invoice's is refused
+   (`METHOD_CHANGE_NOT_AUTHORIZED`).
+
+## Split billing
+
+`SPLIT_BILLING_SUSPECTED` (blocking, dismissible by finance_manager/controller with a ≥ 10-char reason,
+per invoice): open workflow invoices from the same supplier dated within 14 days, each ≤ CAD 10,000
+and together > CAD 10,000 (the P02 boundary), with line descriptions at least 80% similar. When one
+invoice raises it, the related invoices are revalidated so the whole group is held.
 
 ## Validation specifics
 

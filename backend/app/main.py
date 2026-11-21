@@ -53,7 +53,7 @@ def _invoice_for(s, obj_type: str, obj_id: str, request: Request) -> str | None:
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title="Brim Sentinel API", version="1.0.0",
+    app = FastAPI(title="Brim Sentinel API", version="1.1.0",
                   description="Detect. Resolve. Settle. Explain. — AP automation and payment controls for "
                               "Harborline Logistics (synthetic). All payments are SIMULATED. Demo identities "
                               "(X-Demo-User-Id) are a labelled simulation, not authentication.",
