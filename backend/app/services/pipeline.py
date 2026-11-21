@@ -269,10 +269,14 @@ def process(session: Session, inv: Invoice, *, actor: User | None, reason: str,
     dups, dup_results = duplicates.find(session, inv, v)
     results.extend(dup_results)
     ar = anomaly.evaluate(session, inv, v)
-    if ar.status == "SCORED" and ar.band in {"high", "medium"}:
-        results.append(Result("anomaly", "AMOUNT_UNUSUAL", "FAIL", False, ar.signals[0]["explanation"] +
-                              " Review priority only; not a fraud probability.", ar.band,
-                              data={"score": ar.score, "band": ar.band, "method": ar.method_version,
+    amount_part = (ar.inputs or {}).get("amount_component") or {}
+    amount_sig = anomaly.amount_signal(ar)
+    if ar.status == "SCORED" and amount_part.get("band") in {"high", "medium"} and amount_sig:
+        results.append(Result("anomaly", "AMOUNT_UNUSUAL", "FAIL", False, amount_sig["explanation"] +
+                              " Review priority only; not a fraud probability.", amount_part["band"],
+                              data={"score": amount_part.get("score"), "band": amount_part.get("band"),
+                                    "priority_score": ar.score, "priority_band": ar.band,
+                                    "method": ar.method_version,
                                     **{k: ar.inputs.get(k) for k in ("history_count",)}}))
     elif ar.status == "INSUFFICIENT_HISTORY":
         results.append(Result("anomaly", "AMOUNT_HISTORY", "NOT_APPLICABLE", False,

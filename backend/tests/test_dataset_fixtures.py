@@ -138,7 +138,13 @@ def test_at33_queen_street_fixed_rent_not_unusual(client):
 
 
 def test_at48_sparse_history_shows_uncertainty(client):
-    d = inv(client, "IN-EM-001-1")
+    d = inv(client, "IN-EM-001-1")  # Blue Heron: unknown supplier, no history
+    a = d["anomaly"]
+    assert a["status"] == "INSUFFICIENT_HISTORY"  # no amount score is fabricated
+    assert a["inputs"]["amount_component"]["score"] == "0" and "Limited supplier history" in \
+        finding(d, "AMOUNT_HISTORY")["rationale"]
+    assert [s["signal"] for s in a["signals"]] == ["unknown_supplier"]  # identity signal shown separately
+    d = inv(client, "IN-EM-002-1")  # Keystone: known supplier with < 5 prior invoices, no identity signal
     assert d["anomaly"]["status"] == "INSUFFICIENT_HISTORY" and d["risk_band"] == "insufficient_history"
 
 
