@@ -1,21 +1,51 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { flightQuery } from "@/lib/api/queries";
 import { useSession } from "@/lib/session";
 import { formatDate } from "@/lib/format";
-import { evidenceLabel, isNotableResult, plain, policyLabel } from "@/lib/plain-language";
+import {
+  evidenceLabel,
+  evidenceTarget,
+  isNotableResult,
+  plain,
+  policyLabel,
+} from "@/lib/plain-language";
 import { errorMessage } from "./workflow-form";
 
+/** Evidence references as readable lines; invoices and suppliers open in the app. */
 export function Evidence({ items }: { items: unknown[] }) {
   if (!items.length) return null;
   return (
     <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-      {items.map((item, i) => (
-        <li key={i} className="flex gap-1.5">
-          <span aria-hidden>•</span>
-          <span>{evidenceLabel(item)}</span>
-        </li>
-      ))}
+      {items.map((item, i) => {
+        const target = evidenceTarget(item);
+        const label = evidenceLabel(item);
+        return (
+          <li key={i} className="flex gap-1.5">
+            <span aria-hidden>•</span>
+            {target?.kind === "invoice" ? (
+              <Link
+                className="text-primary hover:underline"
+                to="/invoices/$invoiceId"
+                params={{ invoiceId: target.invoiceId }}
+              >
+                {label}
+              </Link>
+            ) : target?.kind === "vendor" ? (
+              <Link
+                className="text-primary hover:underline"
+                to="/vendors"
+                search={{ vendorId: target.vendorId, q: "", status: "" }}
+              >
+                {label}
+              </Link>
+            ) : (
+              <span>{label}</span>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
