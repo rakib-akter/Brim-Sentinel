@@ -94,7 +94,8 @@ export function InvestigatePanel({ caseId, issue }: { caseId: string; issue?: st
         : "Not started";
   return (
     <section
-      className="overflow-hidden rounded-xl border bg-gradient-to-b from-primary-soft/40 to-card"
+      id={`investigation-${caseId}`}
+      className="scroll-mt-40 overflow-hidden rounded-xl border bg-gradient-to-b from-primary-soft/40 to-card"
       aria-labelledby={`inv-${caseId}`}
     >
       <header className="flex flex-wrap items-center gap-3 px-4 py-3">

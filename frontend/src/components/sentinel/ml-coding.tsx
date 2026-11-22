@@ -175,144 +175,173 @@ function CodingLine({
     }))
     .filter((a) => a.gl && a.gl !== line.gl_account)
     .slice(0, 3);
+  // Lines that need a person start open; confident suggestions stay one compact row.
+  const needsYou = low && !decided;
+  const open = needsYou || more;
+  const bodyId = `coding-line-${line.line_no}`;
   return (
     <li
-      className={`rounded-xl border px-4 py-3 ${low && !decided ? "border-warning/50 bg-warning-soft/30" : ""}`}
+      className={`rounded-xl border transition-colors ${needsYou ? "border-warning/50 bg-warning-soft/30" : open ? "bg-secondary/30" : ""}`}
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="min-w-0 text-xs text-muted-foreground">
-          Line {line.line_no} · <span className="text-foreground">{line.description}</span>
-        </p>
-        {line.amount_minor !== null && (
-          <span className="figure text-xs text-muted-foreground">
-            {formatMoney(line.amount_minor, currency)}
-          </span>
-        )}
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-        <p className="min-w-0 text-[15px] font-semibold">
-          {line.gl_account ? (
-            <>
-              <span className="figure">{line.gl_account}</span>
-              {line.gl_name ? <span className="font-normal"> · {line.gl_name}</span> : null}
-            </>
-          ) : (
-            <span className="text-warning-foreground">No account suggested</span>
-          )}
-        </p>
-        <span
-          className={`rounded-full px-2 py-px text-[11px] font-medium ${SOURCE_STYLE[source.kind]}`}
-          title={source.detail}
-        >
-          {source.label}
-        </span>
-        {confidence !== null && !decided && <ConfidenceMeter value={confidence} />}
-      </div>
-
-      {low && !decided && (
-        <p className="mt-2 flex items-start gap-1.5 text-xs text-warning-foreground">
-          <CircleHelp className="mt-px size-3.5 shrink-0" aria-hidden />
-          Low confidence: a person must choose the account. New suppliers are always sent for
-          review.
-        </p>
-      )}
-
-      {low || decided ? null : (
-        <Collapsible open={more} onOpenChange={setMore} className="mt-1.5">
-          <CollapsibleTrigger className="group inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-            {more ? "Hide details" : "Alternatives and why"}
-            <ChevronDown
-              className="size-3.5 transition-transform group-data-[state=open]:rotate-180"
-              aria-hidden
+      <div className="flex items-center gap-3 px-4 py-2.5">
+        <div className="min-w-0 flex-1">
+          <p className="flex min-w-0 items-baseline gap-2 text-xs text-muted-foreground">
+            <span className="truncate" title={line.description ?? undefined}>
+              Line {line.line_no} · <span className="text-foreground">{line.description}</span>
+            </span>
+            {line.amount_minor !== null && (
+              <span className="figure ml-auto shrink-0">
+                {formatMoney(line.amount_minor, currency)}
+              </span>
+            )}
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <p className="min-w-0 truncate text-sm font-semibold">
+              {line.gl_account ? (
+                <>
+                  <span className="figure">{line.gl_account}</span>
+                  {line.gl_name ? <span className="font-normal"> · {line.gl_name}</span> : null}
+                </>
+              ) : (
+                <span className="text-warning-foreground">No account suggested</span>
+              )}
+            </p>
+            <span
+              className={`rounded-full px-2 py-px text-[11px] font-medium ${SOURCE_STYLE[source.kind]}`}
+              title={source.detail}
+            >
+              {source.label}
+            </span>
+            {confidence !== null && !decided && <ConfidenceMeter value={confidence} />}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {canDecide && !decided && line.gl_account && !needsYou && (
+            <WorkflowForm
+              variant="outline"
+              label="Accept"
+              success="Accepted and recorded in the audit trail."
+              run={() =>
+                api.coding(user.id, record.id, {
+                  expected_version: record.version,
+                  lines: [{ line_no: line.line_no, gl_account: line.gl_account }],
+                })
+              }
             />
-          </CollapsibleTrigger>
-        </Collapsible>
-      )}
-
-      {alternatives.length > 0 && !decided && (low || more) && (
-        <div className="mt-2.5">
-          <p className="text-[11px] font-medium text-muted-foreground">Next most likely</p>
-          <ul className="mt-1 space-y-1">
-            {alternatives.map((a) => (
-              <li
-                key={a.gl}
-                className="grid grid-cols-[minmax(0,1fr)_4rem_2.5rem] items-center gap-2 text-xs"
+          )}
+          {!needsYou && (
+            <Collapsible open={more} onOpenChange={setMore}>
+              <CollapsibleTrigger
+                aria-controls={bodyId}
+                aria-label={`${more ? "Hide" : "Show"} alternatives and why for line ${line.line_no}`}
+                className="group inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-primary hover:bg-primary-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <span className="truncate">
-                  <span className="figure">{a.gl}</span>
-                  {a.name ? <span className="text-muted-foreground"> · {a.name}</span> : null}
-                </span>
-                <span className="h-1 overflow-hidden rounded-full bg-secondary">
-                  <span
-                    className="block h-full rounded-full bg-muted-foreground/50"
-                    style={{ width: `${Math.max(2, a.weight ?? 0)}%` }}
-                  />
-                </span>
-                <span className="figure text-right text-muted-foreground">
-                  {a.weight === null ? "—" : a.weight < 1 ? "<1%" : `${a.weight}%`}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {(low || more || decided) && (
-        <WhyThisSuggestion line={line} record={record} source={source} />
-      )}
-
-      {canDecide && !decided && line.gl_account && (
-        <div className="mt-2.5 flex flex-wrap items-start gap-3 border-t pt-2.5">
-          <WorkflowForm
-            label="Accept"
-            success="Accepted and recorded in the audit trail."
-            run={() =>
-              api.coding(user.id, record.id, {
-                expected_version: record.version,
-                lines: [{ line_no: line.line_no, gl_account: line.gl_account }],
-              })
-            }
-          />
-          {alternatives.length > 0 && (
-            <details className="min-w-[16rem] flex-1 text-sm">
-              <summary className="cursor-pointer py-1.5 font-medium text-primary">
-                Change account
-              </summary>
-              <WorkflowForm
-                label="Use this account"
-                success="Changed. Your reason is in the audit trail."
-                run={(fields) =>
-                  api.coding(user.id, record.id, {
-                    expected_version: record.version,
-                    lines: [
-                      {
-                        line_no: line.line_no,
-                        gl_account: value(fields, "account"),
-                        reason: value(fields, "reason"),
-                      },
-                    ],
-                  })
-                }
-              >
-                <Choice
-                  label="Account"
-                  name="account"
-                  options={alternatives.map((a) => ({
-                    value: a.gl,
-                    label: `${a.gl}${a.name ? ` · ${a.name}` : ""}`,
-                  }))}
+                Details
+                <ChevronDown
+                  className="size-3.5 transition-transform group-data-[state=open]:rotate-180"
+                  aria-hidden
                 />
-                <Field label="Why the suggestion is wrong" name="reason" />
-              </WorkflowForm>
-            </details>
+              </CollapsibleTrigger>
+            </Collapsible>
           )}
         </div>
-      )}
-      {!canDecide && !decided && (
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Your role can't change coding on this invoice.
-        </p>
+      </div>
+
+      {open && (
+        <div id={bodyId} className="expand-in border-t px-4 pb-3 pt-2.5">
+          {needsYou && (
+            <p className="flex items-start gap-1.5 text-xs text-warning-foreground">
+              <CircleHelp className="mt-px size-3.5 shrink-0" aria-hidden />
+              Low confidence: a person must choose the account. New suppliers are always sent for
+              review.
+            </p>
+          )}
+
+          {alternatives.length > 0 && !decided && (
+            <div className="mt-2">
+              <p className="text-[11px] font-medium text-muted-foreground">Next most likely</p>
+              <ul className="mt-1 space-y-1">
+                {alternatives.map((a) => (
+                  <li
+                    key={a.gl}
+                    className="grid grid-cols-[minmax(0,1fr)_4rem_2.5rem] items-center gap-2 text-xs"
+                  >
+                    <span className="truncate">
+                      <span className="figure">{a.gl}</span>
+                      {a.name ? <span className="text-muted-foreground"> · {a.name}</span> : null}
+                    </span>
+                    <span className="h-1 overflow-hidden rounded-full bg-secondary">
+                      <span
+                        className="block h-full rounded-full bg-muted-foreground/50"
+                        style={{ width: `${Math.max(2, a.weight ?? 0)}%` }}
+                      />
+                    </span>
+                    <span className="figure text-right text-muted-foreground">
+                      {a.weight === null ? "—" : a.weight < 1 ? "<1%" : `${a.weight}%`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <WhyThisSuggestion line={line} record={record} source={source} />
+
+          {canDecide && !decided && line.gl_account && (
+            <div className="mt-2.5 flex flex-wrap items-start gap-3 border-t pt-2.5">
+              {needsYou && (
+                <WorkflowForm
+                  label={`Accept ${line.gl_account}`}
+                  success="Accepted and recorded in the audit trail."
+                  run={() =>
+                    api.coding(user.id, record.id, {
+                      expected_version: record.version,
+                      lines: [{ line_no: line.line_no, gl_account: line.gl_account }],
+                    })
+                  }
+                />
+              )}
+              {alternatives.length > 0 && (
+                <details className="min-w-[16rem] flex-1 text-sm">
+                  <summary className="cursor-pointer py-1.5 font-medium text-primary">
+                    Change account
+                  </summary>
+                  <WorkflowForm
+                    label="Use this account"
+                    success="Changed. Your reason is in the audit trail."
+                    run={(fields) =>
+                      api.coding(user.id, record.id, {
+                        expected_version: record.version,
+                        lines: [
+                          {
+                            line_no: line.line_no,
+                            gl_account: value(fields, "account"),
+                            reason: value(fields, "reason"),
+                          },
+                        ],
+                      })
+                    }
+                  >
+                    <Choice
+                      label="Account"
+                      name="account"
+                      options={alternatives.map((a) => ({
+                        value: a.gl,
+                        label: `${a.gl}${a.name ? ` · ${a.name}` : ""}`,
+                      }))}
+                    />
+                    <Field label="Why the suggestion is wrong" name="reason" />
+                  </WorkflowForm>
+                </details>
+              )}
+            </div>
+          )}
+          {!canDecide && !decided && (
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Your role can't change coding on this invoice.
+            </p>
+          )}
+        </div>
       )}
     </li>
   );
@@ -322,7 +351,7 @@ function ConfidenceMeter({ value }: { value: number }) {
   const ok = value >= REVIEW_THRESHOLD_PCT;
   return (
     <span className="flex items-center gap-2" aria-label={`Model confidence ${value}%`}>
-      <span className="relative h-1.5 w-28 overflow-hidden rounded-full bg-secondary">
+      <span className="relative h-1.5 w-16 overflow-hidden rounded-full bg-secondary">
         <span
           className={`meter-fill block h-full rounded-full ${ok ? "bg-primary" : "bg-warning"}`}
           style={{ width: `${Math.max(2, Math.min(100, value))}%` }}
@@ -333,7 +362,7 @@ function ConfidenceMeter({ value }: { value: number }) {
           aria-hidden
         />
       </span>
-      <span className="figure text-xs text-muted-foreground">{value}% confidence</span>
+      <span className="figure text-[11px] text-muted-foreground">{value}%</span>
     </span>
   );
 }

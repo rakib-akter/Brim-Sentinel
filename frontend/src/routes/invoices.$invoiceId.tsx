@@ -34,7 +34,7 @@ import { api } from "@/lib/api/client";
 import { ResolutionCase } from "@/components/sentinel/resolution-case";
 import { ApprovalDecision, InvoiceCorrections } from "@/components/sentinel/invoice-actions";
 import { Evidence, FlightRecorder } from "@/components/sentinel/flight-recorder";
-import { SentinelAnalysis, stages } from "@/components/sentinel/invoice-workspace";
+import { findingAnchor, SentinelAnalysis, stages } from "@/components/sentinel/invoice-workspace";
 import { AnomalyPanel, CodingPanel } from "@/components/sentinel/ml-coding";
 import { DocumentPane, useDocumentLayout } from "@/components/sentinel/document-pane";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -215,11 +215,7 @@ function InvoiceContent() {
                 <section id="resolution" className="scroll-mt-36 space-y-3">
                   <StageHeading
                     n={2}
-                    title={
-                      issues
-                        ? `Sentinel found ${issues} issue${issues === 1 ? "" : "s"}`
-                        : "Needs attention"
-                    }
+                    title="Needs attention"
                     note={
                       issues
                         ? "Blocking issues first. Each one explains why it matters and the safe way through."
@@ -602,7 +598,10 @@ function FindingCard({
         ? "border-l-warning"
         : "border-l-border-strong";
   return (
-    <article className={`surface border-l-4 ${tone} px-5 py-4`}>
+    <article
+      id={findingAnchor(finding)}
+      className={`surface scroll-mt-40 border-l-4 ${tone} px-5 py-4`}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-[15px] font-semibold tracking-tight">{finding.title}</h2>
         {finding.blocking ? (

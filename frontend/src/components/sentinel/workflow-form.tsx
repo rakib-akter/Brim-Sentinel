@@ -32,6 +32,7 @@ export function WorkflowForm({
   refresh = true,
   success = "Saved.",
   clearOnSuccess = false,
+  variant = "default",
 }: {
   label: string;
   run: (fields: FormData) => Promise<unknown>;
@@ -39,6 +40,8 @@ export function WorkflowForm({
   refresh?: boolean;
   success?: string;
   clearOnSuccess?: boolean;
+  /** Quieter styles for repeated row actions, so the page keeps one primary button. */
+  variant?: "default" | "outline" | "secondary";
 }) {
   const ready = useSyncExternalStore(subscribeToHydration, isClientReady, isServerReady);
   const cache = useQueryClient();
@@ -85,7 +88,7 @@ export function WorkflowForm({
     >
       <fieldset disabled={!ready || mutation.isPending} className="space-y-3">
         {children}
-        <Button size="sm" type="submit">
+        <Button size="sm" type="submit" variant={variant}>
           {mutation.isPending ? "Working…" : label}
         </Button>
       </fieldset>

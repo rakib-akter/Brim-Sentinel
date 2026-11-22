@@ -86,7 +86,7 @@ export function TaskRow({
   );
   const status = (
     <p
-      className={`mt-0.5 truncate text-[13px] ${STATUS_TEXT[inv.status] ?? "text-muted-foreground"}`}
+      className={`mt-0.5 line-clamp-2 text-[13px] ${STATUS_TEXT[inv.status] ?? "text-muted-foreground"}`}
     >
       {task.plainStatus}
     </p>

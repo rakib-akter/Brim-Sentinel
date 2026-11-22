@@ -137,7 +137,15 @@ export function ProgressRail({ record }: { record: InvoiceRecord }) {
 
 /* ------------------------------------------------------------------ sentinel analysis */
 
-/** The one thing to know about this invoice, its next step, and what Sentinel checked. */
+/** Stable anchor id for a finding card, so the summary can jump to it. */
+export function findingAnchor(f: Pick<Finding, "id" | "code">): string {
+  return `finding-${(f.id ?? f.code).replace(/[^A-Za-z0-9_-]/g, "-")}`;
+}
+
+/**
+ * The summary: how many issues Sentinel found, which ones block payment, one next action, and what
+ * was checked. The explanation of each issue lives once, in its card below, so nothing repeats.
+ */
 export function SentinelAnalysis({
   record,
   findings,
@@ -151,54 +159,71 @@ export function SentinelAnalysis({
   actionLabel: string;
   actionTarget: string | null;
 }) {
-  const hold = findings.find((f) => f.blocking);
-  const advisory = findings.find((f) => !f.blocking);
+  const ranked = [...findings].sort((a, b) => Number(b.blocking) - Number(a.blocking));
+  const blocking = ranked.filter((f) => f.blocking).length;
+  const advisory = ranked.length - blocking;
   const counts = { PASS: 0, FAIL: 0, UNKNOWN: 0 } as Record<string, number>;
   for (const f of record.validation_findings) counts[f.result] = (counts[f.result] ?? 0) + 1;
   const needsPerson = record.line_items.filter((l) => l.coding_status === "NEEDS_REVIEW").length;
-  const openCases = record.resolution_cases.filter(
+  const openCase = record.resolution_cases.find(
     (c) => !["RESOLVED", "REJECTED", "CANCELLED"].includes(c.state),
-  ).length;
-  const tone = hold ? "border-l-critical" : advisory ? "border-l-warning" : "border-l-success";
+  );
+  const tone = blocking ? "border-l-critical" : advisory ? "border-l-warning" : "border-l-success";
+  const headline = ranked.length
+    ? `Sentinel found ${ranked.length} issue${ranked.length === 1 ? "" : "s"}`
+    : plainStatus;
+  const summary = blocking
+    ? `${blocking === 1 ? "One blocks" : `${blocking} block`} payment until a person resolves ${blocking === 1 ? "it" : "them"}${advisory ? `; ${advisory} ${advisory === 1 ? "is" : "are"} advisory only` : ""}.`
+    : advisory
+      ? "Advisory only. Worth a look, but nothing here blocks payment."
+      : "Every blocking check passed.";
+  const jump = (f: Finding) =>
+    document
+      .getElementById(findingAnchor(f))
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   return (
     <section id="detect" className={`surface rise-in scroll-mt-4 border-l-4 ${tone} px-5 py-4`}>
       <p className="eyebrow">Sentinel analysis</p>
-      <div className="mt-1 flex flex-wrap items-start gap-3">
-        {hold ? (
+      <div className="mt-1 flex items-start gap-3">
+        {blocking ? (
           <TriangleAlert className="mt-0.5 size-5 shrink-0 text-critical" aria-hidden />
         ) : (
           <ShieldCheck className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />
         )}
         <div className="min-w-0 flex-1">
-          <h2 className="text-[17px] font-semibold leading-snug tracking-tight">
-            {hold ? hold.title : plainStatus}
-          </h2>
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {hold ? (
-              <span className="rounded-full bg-critical-soft px-2 py-px text-[11px] font-medium text-critical-foreground">
-                Hard hold — payment paused until resolved
-              </span>
-            ) : null}
-            {advisory ? (
-              <span className="rounded-full bg-warning-soft px-2 py-px text-[11px] font-medium text-warning-foreground">
-                Advisory — worth a look, doesn't block payment
-              </span>
-            ) : null}
-          </div>
-          {(hold ?? advisory) && (
-            <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div>
-                <dt className="eyebrow">Why this matters</dt>
-                <dd className="mt-1 text-sm">{(hold ?? advisory)!.whyItMatters}</dd>
-              </div>
-              <div>
-                <dt className="eyebrow">What happens next</dt>
-                <dd className="mt-1 text-sm">{(hold ?? advisory)!.whatHappensNext}</dd>
-              </div>
-            </dl>
-          )}
+          <h2 className="text-[17px] font-semibold leading-snug tracking-tight">{headline}</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">{summary}</p>
         </div>
       </div>
+      {ranked.length > 0 && (
+        <ul className="mt-3 divide-y rounded-lg border" aria-label="Issues found">
+          {ranked.map((f) => (
+            <li key={f.id ?? f.code}>
+              <button
+                type="button"
+                onClick={() => jump(f)}
+                className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary/60 focus-visible:bg-secondary/60 focus-visible:outline-none"
+              >
+                <span
+                  className={`size-2 shrink-0 rounded-full ${f.blocking ? "bg-critical" : "bg-warning"}`}
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1 truncate font-medium">{f.title}</span>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-px text-[11px] font-medium ${
+                    f.blocking
+                      ? "bg-critical-soft text-critical-foreground"
+                      : "bg-secondary text-muted-foreground"
+                  }`}
+                >
+                  {f.blocking ? "Blocks payment" : "Advisory"}
+                </span>
+                <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {actionTarget && (
           <Button asChild>
@@ -208,9 +233,9 @@ export function SentinelAnalysis({
             </a>
           </Button>
         )}
-        {openCases > 0 && (
+        {openCase && (
           <Button variant="outline" asChild>
-            <a href="#resolution">
+            <a href={`#investigation-${openCase.id}`}>
               <Sparkles aria-hidden /> Ask Sentinel why
             </a>
           </Button>
@@ -234,13 +259,13 @@ export function SentinelAnalysis({
           {needsPerson > 0 ? (
             <span className="text-warning-foreground"> · {needsPerson} need a person</span>
           ) : (
-            " · suggested"
+            " · suggested by ML"
           )}
         </li>
         <li>
           <span className="font-medium text-foreground">Checks</span> · {counts["PASS"] ?? 0} passed
           {(counts["FAIL"] ?? 0) > 0 && (
-            <span className="text-critical-foreground"> · {counts["FAIL"]} problems</span>
+            <span className="text-critical-foreground"> · {counts["FAIL"]} failed</span>
           )}
           {(counts["UNKNOWN"] ?? 0) > 0 && (
             <span className="text-warning-foreground">

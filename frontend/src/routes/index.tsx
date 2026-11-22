@@ -20,7 +20,7 @@ import { SimulatedTag } from "@/components/sentinel/badges";
 import { homeQuery, invoicesQuery } from "@/lib/api/queries";
 import { ROLES } from "@/lib/domain/roles";
 import type { InvoiceStatusFilter } from "@/lib/domain/types";
-import { formatDate, formatMoney, TODAY } from "@/lib/format";
+import { formatDate, formatMoney, today } from "@/lib/format";
 import { CountUp } from "@/components/sentinel/count-up";
 import { plain } from "@/lib/plain-language";
 import { useSession } from "@/lib/session";
@@ -57,7 +57,7 @@ function OverviewPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow={`${formatDate(TODAY, { weekday: "long", month: "long", day: "numeric" })} · demo date`}
+        eyebrow={formatDate(today(), { weekday: "long", month: "long", day: "numeric" })}
         title="Your AP work, prioritized"
         description={`Signed in as ${user.name} (${ROLES[user.role].label}, demo identity). The most urgent item is at the top, with one next step each.`}
         actions={

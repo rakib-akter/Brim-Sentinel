@@ -1,10 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Money } from "@/components/sentinel/money";
 import { PageHeader } from "@/components/sentinel/page-header";
 import { ResolutionCase } from "@/components/sentinel/resolution-case";
 import { QueryState } from "@/components/sentinel/query-state";
 import { humanize } from "@/components/sentinel/workflow-form";
-import { caseQuery, casesQuery } from "@/lib/api/queries";
+import { caseQuery, casesQuery, invoicesQuery } from "@/lib/api/queries";
+import type { CaseSummary } from "@/lib/api/schema";
+import { SEVERITY_STYLE, sortCases } from "@/lib/cases";
 import { useSession } from "@/lib/session";
 
 export const Route = createFileRoute("/investigations")({
@@ -16,6 +21,7 @@ export const Route = createFileRoute("/investigations")({
   loader: async ({ context, deps }) => {
     await Promise.all([
       context.queryClient.prefetchQuery(casesQuery(context.actor, !deps.history)),
+      context.queryClient.prefetchQuery(invoicesQuery(context.actor, { includeHistory: true })),
       deps.caseId
         ? context.queryClient.prefetchQuery(caseQuery(context.actor, deps.caseId))
         : undefined,
@@ -29,17 +35,31 @@ function Investigations() {
   const { user, users } = useSession();
   const search = Route.useSearch();
   const cases = useQuery(casesQuery(user.id, !search.history));
+  const invoices = useQuery(invoicesQuery(user.id, { includeHistory: true }));
+  const byInvoice = new Map((invoices.data ?? []).map((t) => [t.invoice.id, t.invoice]));
+  const items = sortCases(cases.data?.items ?? []);
+  const ownerName = (item: CaseSummary) =>
+    item.owner_id
+      ? (users.find((u) => u.id === item.owner_id)?.name ?? humanize(item.owner_role))
+      : humanize(item.owner_role);
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Oversight"
         title="Investigations"
-        description="Review evidence and track the Path to Pay for each resolution case."
+        description="Every open exception with its evidence and the safe path to pay. Most severe first."
       />
       {search.caseId && <ResolutionCase key={search.caseId} id={search.caseId} />}
-      <section className="surface overflow-hidden">
+      <section className="surface overflow-hidden" aria-labelledby="cases-heading">
         <div className="flex items-center justify-between border-b px-5 py-3">
-          <h2 className="font-semibold">{search.history ? "All cases" : "Open cases"}</h2>
+          <h2 id="cases-heading" className="font-semibold">
+            {search.history ? "All cases" : "Open cases"}
+            {cases.data && (
+              <span className="figure ml-2 rounded-full bg-secondary px-2 py-px text-xs font-medium text-muted-foreground">
+                {items.length}
+              </span>
+            )}
+          </h2>
           <Link
             className="text-sm font-medium text-primary hover:underline"
             to="/investigations"
@@ -52,27 +72,69 @@ function Investigations() {
           <QueryState error={cases.error} loading="Loading cases…" retry={cases.refetch} />
         )}
         {cases.data?.items.length === 0 && (
-          <p className="p-5 text-sm text-muted-foreground">No cases in this view.</p>
+          <p className="p-5 text-sm text-muted-foreground">
+            No open cases. Sentinel opens one whenever a check pauses a payment.
+          </p>
         )}
         <ul className="divide-y">
-          {cases.data?.items.map((item) => (
-            <li key={item.id} className="px-5 py-3 text-sm">
-              <Link
-                className="font-medium text-primary hover:underline"
-                to="/investigations"
-                search={{ ...search, caseId: item.id }}
+          {items.map((item) => {
+            const inv = byInvoice.get(item.invoice_id);
+            const sev = SEVERITY_STYLE[item.severity] ?? SEVERITY_STYLE["low"]!;
+            const selected = search.caseId === item.id;
+            return (
+              <li
+                key={item.id}
+                className={`relative flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 transition-colors hover:bg-secondary/60 ${selected ? "bg-primary-soft/40" : ""}`}
               >
-                {item.title}
-              </Link>
-              <p className="text-muted-foreground">
-                {humanize(item.state)} · Owner:{" "}
-                {item.owner_id
-                  ? (users.find((u) => u.id === item.owner_id)?.name ?? humanize(item.owner_role))
-                  : humanize(item.owner_role)}{" "}
-                · Invoice {item.invoice_id}
-              </p>
-            </li>
-          ))}
+                <span
+                  className={`absolute inset-y-3 left-0 w-[3px] rounded-r ${sev.rail}`}
+                  aria-hidden
+                />
+                <div className="min-w-[16rem] flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      className="text-sm font-medium text-foreground hover:underline"
+                      to="/investigations"
+                      search={{ ...search, caseId: item.id }}
+                      aria-current={selected ? "true" : undefined}
+                    >
+                      {item.title}
+                    </Link>
+                    <span className={`rounded-full px-2 py-px text-[11px] font-medium ${sev.chip}`}>
+                      {sev.label}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[13px] text-muted-foreground">
+                    {inv ? (
+                      <>
+                        {inv.supplierName}
+                        <span className="figure"> · #{inv.number ?? item.invoice_id}</span>
+                      </>
+                    ) : (
+                      <>Invoice {item.invoice_id}</>
+                    )}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {humanize(item.state)} · Next: {ownerName(item)}
+                  </p>
+                </div>
+                <div className="ml-auto flex shrink-0 items-center gap-4">
+                  {inv && (
+                    <Money
+                      minor={inv.totalMinor}
+                      currency={inv.currency}
+                      className="whitespace-nowrap text-sm font-medium"
+                    />
+                  )}
+                  <Button size="sm" variant="outline" asChild>
+                    <Link to="/invoices/$invoiceId" params={{ invoiceId: item.invoice_id }}>
+                      Review case <ArrowRight aria-hidden />
+                    </Link>
+                  </Button>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </section>
     </div>
