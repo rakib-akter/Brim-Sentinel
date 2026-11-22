@@ -10,7 +10,7 @@ from app.core.permissions import PERMISSIONS, has, require
 from app.db.models import User
 from app.db.seed import run_seed
 from app.schemas import dto
-from app.services import views
+from app.services import analytics, views
 
 router = APIRouter(tags=["meta"], responses=ERRORS)
 
@@ -45,3 +45,10 @@ def import_dataset(actor: User = Depends(get_actor), db: Session = Depends(get_d
     counts = run_seed(db)
     db.commit()
     return dto.ImportOut(counts=counts)
+
+
+@router.get("/api/v1/analytics", response_model=dto.AnalyticsOut)
+def analytics_summary(actor: User = Depends(get_actor), db: Session = Depends(get_db)) -> dto.AnalyticsOut:
+    """Spend by month, department, supplier and category; processing status, hold reasons, approval
+    workload and payments. Aggregates of stored records only, scoped like invoice visibility."""
+    return dto.AnalyticsOut(**analytics.summary(db, actor))
