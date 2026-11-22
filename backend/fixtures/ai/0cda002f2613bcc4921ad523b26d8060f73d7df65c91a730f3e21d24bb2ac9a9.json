@@ -1,0 +1,60 @@
+{
+ "content": [
+  {
+   "type": "thinking",
+   "thinking": "",
+   "signature": "CAQS8AYKEAgUGAI4AUIIdGhpbmtpbmcSDAoV3WPn5zl0sNeehhoM6/ZQQzuB25z077D+IjBg0wK/FzefBnUkiCbiDilPzH4oXhxK2aINCx6Ri5ggOJgc3AiLpVO1TPEMKx56nssqjQbPBnqRjsEJZ6EooghnH4mTrSmeT65iH/cClvdCqbTwnAqGJK1oNuHhXlm7bt2AMwzj9lqSgBf6TxeRP9YIlS1uqLVmkNL1YSZMFDiTEoVBaQyaFC1P0FfDQaqQJiQ6+pw/XwFfZpz9F5TKF6PKdzJ+mYEkvsjVUpj+02NkWnuUmwRmSE09fmm+9h8BOvOLgvIVyGRhPsRb+lJXahp4QY0l2Zmw8A2zgxifL74/j/nTgW66lJjx5fpa0a3PWZSVo51nIGdaAKHFXHui28/kZI+HgjvbE5hBiH4kE6psPRfxZtor/0tjuZcNBpxYGZAq5h3cfLQw5CNou+50YP5SCQu0mnz1VLtz843xXjgMDGX+NJzRdzIVemyqWnI7Tt8gnO6Pnu2oJoUA0rQ4b0i3nCIPZE74XNYe/z1NLug0IrR8WmEc9eP0MA1bNl5nXgl9ulbU5cA0WIlGWYcWS2rCx71Uzk+gCyuLbKOxEYYuYnK9Fw5OaLCw1kNckOm9Esol+XNskST5FLoBRZ4YQeRtSjIdZnKsQ71bqw1IH9dW5bChGk3ukdMohVUSA8/duukHY11OkOJR6/nWrZ8/OIe4Wirj+tzLd4IY64fKeg72zlGg1tvAILDAFxR2WkkQoD4xSDfwdLtXL1LvtniEd6+Fi2TXKXkPd+JNre0eP+ESgH8RIx+RTCFN4SUFhU/nkPmoZs/0dvmwr357VQjE06fRz02fIc8DkxZVQocwIe/wuwa30E8+x/CDiWiUDoet1FLTf6oNQpeEwjMxSOcIc3/gZCulXjH7zX+vRGJ9NNVYWZzUYRNVwHMWTGuNwhyCpMhLHYDNu78ujhBpwVSIcPDLwpZqqXq9ktrYlgVXvC0UhfA4HfVFL0+VhuiahDV4xw/N465BJlyNvq9Q9NuR0TXWb2AweGF2KiO+87oxtQhxEI85OpYaCEMNj1Yjw2d76gvVImYiPZq86BadsGeR6RJ24CdmAre3uCno/S4zUi9vd7u+6Kg/NWrYmp0eH5XQgkKcrkuAxACxAtoHU/bwoWh9GAE="
+  },
+  {
+   "type": "tool_use",
+   "id": "toolu_01VZBFUPMioHimF2fLp93cUJ",
+   "name": "find_related_invoices",
+   "input": {
+    "vendor_id": "V004"
+   },
+   "caller": {
+    "type": "direct"
+   }
+  },
+  {
+   "type": "tool_use",
+   "id": "toolu_01Sfetp6DMVaZu9r36siQJms",
+   "name": "get_approval_history",
+   "input": {
+    "invoice_id": "IN-EM-013-1"
+   },
+   "caller": {
+    "type": "direct"
+   }
+  },
+  {
+   "type": "tool_use",
+   "id": "toolu_01AZMymE8QT3kXBQdFzLhzoB",
+   "name": "get_contract_terms",
+   "input": {
+    "vendor_id": "V004"
+   },
+   "caller": {
+    "type": "direct"
+   }
+  }
+ ],
+ "stop_reason": "tool_use",
+ "usage": {
+  "input_tokens": 2830,
+  "cache_creation_input_tokens": 0,
+  "cache_read_input_tokens": 0,
+  "cache_creation": {
+   "ephemeral_5m_input_tokens": 0,
+   "ephemeral_1h_input_tokens": 0
+  },
+  "output_tokens": 264,
+  "output_tokens_details": {
+   "thinking_tokens": 95
+  },
+  "service_tier": "standard",
+  "inference_geo": "global",
+  "speed": "standard"
+ },
+ "model": "claude-sonnet-5-5"
+}

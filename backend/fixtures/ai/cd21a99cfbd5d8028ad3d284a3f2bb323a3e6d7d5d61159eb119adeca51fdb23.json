@@ -1,0 +1,60 @@
+{
+ "content": [
+  {
+   "type": "thinking",
+   "thinking": "",
+   "signature": "CAQSzgUKEAgUGAI4AUIIdGhpbmtpbmcSDMYtJ+RHKE0gBOBxzhoMYfmXMADnFbOMWTCmIjAZwNwSUcrLgKcB5awcZsanYtNnDNpYBQtulbxn8gibyW7sVSV2SxHJmom+eHSBFGQq6wSXjSkXYZeYsc1A/zh3tBbwlyUBe08oDbBU21Ch/H7uNAAoT9Xq/WWjfm52zXx9saPX07umOikDvEpMWPPoqaldRVhPjhTJENXHUrNImkY+9tkjI8KrIB1uL1UL3RgCqh17srxKdp+/JZsc0W+nAwUC18Pt5GJLopcvlgtP+xmjaLYLivoewotf+TudPm65f5WWiBHraWgKWy00JYWd4C3AsmJcyilVT3EFbrODN1joYvLnZ7/6E9Pxsp7oitfUNqEVK502rrXA+pLntHBVUux42QQ/dhitJ+j2DJlanX+W87KYxBL0NjgwyDKiI65j73swA05Q3kC4kDN+Z65gHTIh3QqQ5CCtYc2UzJO7yOMjf41UxVbUFinrMwmS+etjLvJbPnh+j27e15sboFy+3i3MvsJhkn7lLf4QFOXsBseNvRVXUAB0xdNnBovAC5L4A0sXlk8LjXBU6rb0tHkeqFlYNf5yK0K/nsHvJCOUEFysMTBvuBSzeRSVeubn1KUhzV2ZXr74qG92LnW7RaKiYsV3Wae7uekaXlYdqDUvWW5n2Ax1epW9wrn4nzPnVPtvleMlwZaVdLnPq/E8FaanSj142gidoBjiwMqv3TRC/9pj7hFgPL/vgD8Ew7b86AGzJ1qTm+EnpeGRyQ88MfLQ9+39YfDTOMwbw6DDfh+kLkyFlEqnlJblsYAi8POhEC+kM12HyCXkK0LxwnkzZpqcIW2QdutdCcDM8mDvl7EyYSQkwT4gjmpi305wEcfeVy5UgGq8+KB1T3IYu3vqjWd7KRAbwgXQvIzu1tt/g5DhB5U02QjNv49qEG5cBhBJGAE="
+  },
+  {
+   "type": "tool_use",
+   "id": "toolu_01UB47ThsYRjvHLfCnfzF1Co",
+   "name": "get_vendor_profile",
+   "input": {
+    "vendor_id": "V046"
+   },
+   "caller": {
+    "type": "direct"
+   }
+  },
+  {
+   "type": "tool_use",
+   "id": "toolu_01Y84cD4FvG1n6JA5PZjW3xK",
+   "name": "get_approval_history",
+   "input": {
+    "invoice_id": "IN-EM-017-1"
+   },
+   "caller": {
+    "type": "direct"
+   }
+  },
+  {
+   "type": "tool_use",
+   "id": "toolu_01NQeSMZLnidU6nkP3yvPTpp",
+   "name": "get_bank_changes",
+   "input": {
+    "vendor_id": "V046"
+   },
+   "caller": {
+    "type": "direct"
+   }
+  }
+ ],
+ "stop_reason": "tool_use",
+ "usage": {
+  "input_tokens": 5585,
+  "cache_creation_input_tokens": 0,
+  "cache_read_input_tokens": 0,
+  "cache_creation": {
+   "ephemeral_5m_input_tokens": 0,
+   "ephemeral_1h_input_tokens": 0
+  },
+  "output_tokens": 209,
+  "output_tokens_details": {
+   "thinking_tokens": 39
+  },
+  "service_tier": "standard",
+  "inference_geo": "global",
+  "speed": "standard"
+ },
+ "model": "claude-sonnet-5-5"
+}

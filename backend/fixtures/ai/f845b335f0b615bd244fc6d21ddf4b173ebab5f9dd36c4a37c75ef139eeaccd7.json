@@ -1,0 +1,60 @@
+{
+ "content": [
+  {
+   "type": "thinking",
+   "thinking": "",
+   "signature": "CAQSwgUKEAgUGAI4AUIIdGhpbmtpbmcSDMNHKggaZNdPhHw31hoMMAYAMALorRHLNo33IjAO1I+d4VQfaJVa/bMsAU5Yxdh4B+8ns2RaX/sKjU4EbRpPy6wIaU7maPHqNFtVnowq3wSRIwMMa2yu3PPXglf4+jEkl6ReCIow7iJpa3DVDgcerdWGUVjxtTL2VspZpvpN3bxkUE+q9DOoSp703tLpvg9W4UBQ0yjek1EV/HYkHDcP37UkP5uHUhxO/GG8XuQ8jjn6oX8cukyXdsJ+GwhntalQQWqF+T4UJm5yolWGsB8MkOZ159MAKH1DDA/l+ViHj2apg41wZy5UaoKsSyD8NPminA/pLl+HbSvfVaoOi+IL32HQYNTOeUqfNj4CuzhLu8wk42s7uK6AHfqLWuQ0D6cmRwoWMUCMUyHXmTpKcwLYTkJkr64wdBA4vQs8fMHZJ8KFmhFpE9xUtSOtH6ug+ZsFnouzwJq1BzHjU3Zyz0zoOLmT79XzmVxwCirkiPqo9Hcr6KRWbXUb3ge6krHufROud6kXpgKbdXpF+a1bpkwgzaIdeePNI2aGB0MdOW8iEnj//FTeQaZ08Y5bCUiDaBagl0tAXS48/09qvYK0TR0A9mhEfJjsSe2IWK2GmH8uYFfwrVgW3UTIN+Tgo/tOr2s+cMcrCdKXIkvRALC5rFt9VLLurY+1E0kKilxt5QLu6YoJ3HaXKjDb9XCpfzhYtp+bBPGUBnkf0M7GyQvogcj754+ofE508hSAqt0SVLgcJ8RPT1jkJuirytNcPh+s3jPh0sSQohyvsuvnzLSd9wEibJG3oJGDW8fzyKT7tww6yGRVt2U8MTGJZx15fGL5dFGeGAiEJfZFveklOGaXcxw/hoImrbcxpuAkid7bWxPnEoIZ1kOBO+lrRdGnFY7DvOW9+0rCbm0dkr+S1S665O9NGAE="
+  },
+  {
+   "type": "tool_use",
+   "id": "toolu_01236PayhgvbS1dtbzGURJUC",
+   "name": "find_related_invoices",
+   "input": {
+    "vendor_id": "V004"
+   },
+   "caller": {
+    "type": "direct"
+   }
+  },
+  {
+   "type": "tool_use",
+   "id": "toolu_01Ec5dTP1sgfLUr4nWaf6RPg",
+   "name": "get_approval_history",
+   "input": {
+    "invoice_id": "IN-EM-019-1"
+   },
+   "caller": {
+    "type": "direct"
+   }
+  },
+  {
+   "type": "tool_use",
+   "id": "toolu_012xnxQmeBiJ7jkqTcQQaPYP",
+   "name": "get_contract_terms",
+   "input": {
+    "vendor_id": "V004"
+   },
+   "caller": {
+    "type": "direct"
+   }
+  }
+ ],
+ "stop_reason": "tool_use",
+ "usage": {
+  "input_tokens": 2830,
+  "cache_creation_input_tokens": 0,
+  "cache_read_input_tokens": 0,
+  "cache_creation": {
+   "ephemeral_5m_input_tokens": 0,
+   "ephemeral_1h_input_tokens": 0
+  },
+  "output_tokens": 206,
+  "output_tokens_details": {
+   "thinking_tokens": 37
+  },
+  "service_tier": "standard",
+  "inference_geo": "global",
+  "speed": "standard"
+ },
+ "model": "claude-sonnet-5-5"
+}
