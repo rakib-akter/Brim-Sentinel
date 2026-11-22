@@ -4,6 +4,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
   type ErrorComponentProps,
@@ -132,6 +133,15 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+function PageTransition({ children }: { children: ReactNode }) {
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  return (
+    <div key={path} className="page-enter">
+      {children}
+    </div>
+  );
+}
+
 function RootComponent() {
   const { queryClient, actor } = Route.useRouteContext();
 
@@ -139,8 +149,10 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <SessionProvider actor={actor}>
         <AppShell>
-          {/* Required: nested routes render here. */}
-          <Outlet />
+          {/* Required: nested routes render here. Keyed by path so each page eases in. */}
+          <PageTransition>
+            <Outlet />
+          </PageTransition>
         </AppShell>
         <Toaster position="bottom-right" />
       </SessionProvider>
