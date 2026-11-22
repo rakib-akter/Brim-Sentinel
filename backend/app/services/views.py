@@ -177,7 +177,8 @@ def summary(ctx: Ctx, inv: Invoice, v: InvoiceVersion | None = None) -> dto.Invo
     if inv.lifecycle_state == lc.PENDING_APPROVAL:
         pend = next((st for st in steps if st[1] == "PENDING"), None)
         if pend:
-            blocked.append(f"Waiting for {ctx.name(pend[0].assigned_actor_id)} ({pend[0].step_key}) to approve")
+            step_role = STEP_LABEL.get(pend[0].step_key, pend[0].step_key.replace("_", " "))
+            blocked.append(f"Waiting for {ctx.name(pend[0].assigned_actor_id)} ({step_role}) to approve")
     plain = STATE_LABEL.get(inv.lifecycle_state, inv.lifecycle_state)
     if inv.lifecycle_state == lc.ON_HOLD:
         plain = f"Payment paused — {blocking[0].title}" if blocking else "Payment paused"
@@ -516,6 +517,10 @@ def dashboard(ctx: Ctx) -> dto.DashboardOut:
 
 
 # ------------------------------------------------------------------ flight recorder
+# Approval step names as customers read them (never the internal step key).
+STEP_LABEL = {"dept_manager": "department manager", "finance_manager": "finance manager",
+              "controller_admin": "controller", "cfo": "CFO"}
+
 ACTION_LABEL = {
     "invoice.received": "Invoice received and stored with its SHA-256 hash",
     "invoice.extracted": "Fields extracted from the document",
