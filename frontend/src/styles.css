@@ -142,7 +142,8 @@
 
   /* Elevation */
   --shadow-card: 0 1px 2px oklch(0.26 0.032 263.8 / 0.04), 0 1px 3px oklch(0.26 0.032 263.8 / 0.04);
-  --shadow-raised: 0 12px 32px -12px oklch(0.26 0.032 263.8 / 0.14), 0 2px 6px oklch(0.26 0.032 263.8 / 0.05);
+  --shadow-raised:
+    0 12px 32px -12px oklch(0.26 0.032 263.8 / 0.14), 0 2px 6px oklch(0.26 0.032 263.8 / 0.05);
   --shadow-focus: 0 0 0 3px oklch(0.517 0.208 287.6 / 0.22);
 }
 
@@ -245,8 +246,12 @@
 }
 
 @keyframes shimmer-bar {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(250%); }
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
 }
 
 @utility processing-bar {
@@ -397,5 +402,89 @@
   }
   .lift:hover {
     transform: none;
+  }
+}
+
+/* Graphs and investigation activity. */
+@keyframes node-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 oklch(0.577 0.215 27.3 / 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 6px oklch(0.577 0.215 27.3 / 0);
+  }
+}
+@keyframes active-dot {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 oklch(0.517 0.208 287.6 / 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 5px oklch(0.517 0.208 287.6 / 0);
+  }
+}
+@layer components {
+  .graph-node-enter {
+    animation: rise-in 300ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .node-pulse {
+    animation: node-pulse 2.4s ease-in-out 3;
+  }
+  .active-dot {
+    animation: active-dot 1.6s ease-in-out infinite;
+  }
+  .react-flow__controls {
+    border-radius: 0.5rem;
+    overflow: hidden;
+    box-shadow: var(--shadow-card);
+  }
+  .react-flow__controls-button {
+    background: var(--color-card);
+    border-color: var(--color-border);
+    color: var(--color-foreground);
+  }
+}
+@keyframes meter-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes collapsible-down {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+}
+@keyframes collapsible-up {
+  from {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+@layer components {
+  .meter-fill {
+    transform-origin: left;
+    animation: meter-grow 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .collapsible-content {
+    overflow: hidden;
+  }
+  .collapsible-content[data-state="open"] {
+    animation: collapsible-down 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .collapsible-content[data-state="closed"] {
+    animation: collapsible-up 180ms ease-in;
   }
 }

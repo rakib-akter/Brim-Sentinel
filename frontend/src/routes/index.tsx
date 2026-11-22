@@ -1,42 +1,27 @@
-import { Suspense, useDeferredValue, useState } from "react";
+import { Suspense } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   AlertOctagon,
   ArrowRight,
-  CalendarClock,
   CheckCircle2,
   CheckSquare,
-  FileCheck2,
-  PauseCircle,
-  Search,
-  SearchX,
-  ShieldAlert,
+  ChevronDown,
   Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/sentinel/empty-state";
-import { InvoiceTable } from "@/components/sentinel/invoice-table";
 import { GuidedDemo } from "@/components/sentinel/guided-demo";
-import { MetricCard } from "@/components/sentinel/metric-card";
 import { PageHeader } from "@/components/sentinel/page-header";
 import { TaskRow, TaskSection } from "@/components/sentinel/task-list";
 import { UploadInvoiceDialog } from "@/components/sentinel/upload-invoice-dialog";
 import { SimulatedTag } from "@/components/sentinel/badges";
 import { homeQuery, invoicesQuery } from "@/lib/api/queries";
 import { ROLES } from "@/lib/domain/roles";
-import { STATUS_FILTERS, STATUS_FILTER_LABELS } from "@/lib/domain/status-groups";
 import type { InvoiceStatusFilter } from "@/lib/domain/types";
-import { formatDate, TODAY } from "@/lib/format";
+import { formatDate, formatMoney, TODAY } from "@/lib/format";
+import { CountUp } from "@/components/sentinel/count-up";
 import { plain } from "@/lib/plain-language";
 import { useSession } from "@/lib/session";
 
@@ -72,9 +57,9 @@ function OverviewPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow={formatDate(TODAY, { weekday: "long", month: "long", day: "numeric" })}
-        title={`Welcome back, ${user.name.split(" ")[0]}`}
-        description={`Here's what needs you today as ${ROLES[user.role].label}. Every item has one clear next step.`}
+        eyebrow={`${formatDate(TODAY, { weekday: "long", month: "long", day: "numeric" })} · demo date`}
+        title="Your AP work, prioritized"
+        description={`Signed in as ${user.name} (${ROLES[user.role].label}, demo identity). The most urgent item is at the top, with one next step each.`}
         actions={
           permissions.includes("invoice.upload") ? (
             <>
@@ -96,11 +81,7 @@ function OverviewPage() {
 function OverviewSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-[68px] rounded-xl" />
-        ))}
-      </div>
+      <Skeleton className="h-[76px] rounded-xl" />
       <div className="grid gap-6 lg:grid-cols-5">
         <Skeleton className="h-96 rounded-xl lg:col-span-3" />
         <Skeleton className="h-96 rounded-xl lg:col-span-2" />
@@ -112,52 +93,61 @@ function OverviewSkeleton() {
 function OverviewContent() {
   const { user } = useSession();
   const { data } = useSuspenseQuery(homeQuery(user.id));
+  const { data: invoices } = useSuspenseQuery(invoicesQuery(user.id, {}));
   const { metrics } = data;
-  const attention = data.needsAttention.slice(0, 6);
+  const attention = data.needsAttention.slice(0, 5);
+  const held = data.needsAttention
+    .filter((t) => t.record?.lifecycle_state === "ON_HOLD")
+    .reduce((sum, t) => sum + (t.record?.amount_cad_minor ?? 0), 0);
+  const top = attention[0];
 
   return (
     <>
-      <GuidedDemo />
-      <div className="stagger grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Link to="/approvals">
-          <MetricCard
-            label="Ready for approval"
-            value={metrics.readyForApproval}
-            hint="Awaiting a decision"
-            icon={FileCheck2}
+      <section className="surface" aria-label="Key numbers">
+        <dl className="stagger grid grid-cols-2 divide-y sm:grid-cols-3 sm:divide-y-0 lg:grid-cols-5 lg:divide-x">
+          <Kpi
+            label="Invoices checked"
+            value={invoices.length}
+            hint="visible to your role"
+            to="/invoices"
           />
-        </Link>
-        <a href="#intake-items">
-          <MetricCard
-            label="Open intake items"
-            value={metrics.needsReview}
-            hint="Waiting on a person"
-            icon={ShieldAlert}
-            tone="warning"
-          />
-        </a>
-        <Link to="/invoices" search={{ status: "attention" }}>
-          <MetricCard
-            label="Payments on hold"
+          <Kpi
+            label="Need a person"
             value={metrics.onHold}
-            hint="Paused until resolved"
-            icon={PauseCircle}
+            hint="payment paused or unclear"
+            tone="critical"
+            to="/invoices"
+            search={{ status: "attention" }}
+          />
+          <Kpi
+            label="Amount on hold"
+            value={formatMoney(held, "CAD")}
+            hint="CAD, until resolved"
             tone="critical"
           />
-        </Link>
-        <Link to="/payments">
-          <MetricCard
-            label="Upcoming payments"
-            value={metrics.upcomingPayments}
-            hint="Simulated"
-            icon={CalendarClock}
-            tone="info"
+          <Kpi
+            label="Ready for approval"
+            value={metrics.readyForApproval}
+            hint="awaiting a decision"
+            to="/approvals"
           />
-        </Link>
-      </div>
+          <Kpi
+            label="Simulated payments"
+            value={metrics.upcomingPayments}
+            hint="scheduled, no real money"
+            to="/payments"
+          />
+        </dl>
+      </section>
 
       <div className="grid items-start gap-6 lg:grid-cols-5">
-        <div className="lg:col-span-3">
+        <div className="space-y-3 lg:col-span-3">
+          {top && (
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">Start here:</span>{" "}
+              {top.invoice.supplierName} — {top.plainStatus.replace(/^Payment paused — /, "")}.
+            </p>
+          )}
           <TaskSection
             title="Needs your attention"
             description="Unresolved problems, suspicious activity or missing information — most urgent first."
@@ -200,10 +190,19 @@ function OverviewContent() {
             description="Invoices waiting for a decision."
             icon={CheckSquare}
             count={data.readyForApproval.length}
+            footer={
+              data.readyForApproval.length > 4 ? (
+                <Button variant="link" size="sm" className="h-auto px-0" asChild>
+                  <Link to="/approvals">
+                    View all {data.readyForApproval.length} <ArrowRight aria-hidden />
+                  </Link>
+                </Button>
+              ) : null
+            }
           >
             {data.readyForApproval.length ? (
               <ul className="stagger divide-y">
-                {data.readyForApproval.map((t) => (
+                {data.readyForApproval.slice(0, 4).map((t) => (
                   <TaskRow key={t.invoice.id} task={t} compact />
                 ))}
               </ul>
@@ -250,10 +249,19 @@ function OverviewContent() {
         </div>
       </div>
 
-      <section id="intake-items" className="surface overflow-hidden">
-        <h2 className="border-b px-5 py-3 font-semibold">Intake work items</h2>
-        {data.workItems.length ? (
-          <ul className="stagger divide-y">
+      <GuidedDemo />
+      <HowSentinelHelps />
+
+      {data.workItems.length > 0 && (
+        <details id="intake-items" className="surface group overflow-hidden">
+          <summary className="flex cursor-pointer items-center justify-between px-5 py-3 text-sm font-semibold">
+            Intake work items ({data.workItems.length})
+            <ChevronDown
+              className="size-4 transition-transform group-open:rotate-180"
+              aria-hidden
+            />
+          </summary>
+          <ul className="divide-y border-t">
             {data.workItems.map((item) => (
               <li key={item.id} className="px-5 py-3 text-sm">
                 <p className="font-medium">{item.subject ?? plain(item.item_type)}</p>
@@ -264,69 +272,112 @@ function OverviewContent() {
               </li>
             ))}
           </ul>
-        ) : (
-          <p className="px-5 py-3 text-sm text-muted-foreground">
-            No intake work items in this view.
-          </p>
-        )}
-      </section>
-      <AllInvoices />
+        </details>
+      )}
     </>
   );
 }
 
-function AllInvoices() {
-  const { user } = useSession();
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState<InvoiceStatusFilter>("all");
-  const params = useDeferredValue({ q, status });
-  const { data } = useSuspenseQuery(invoicesQuery(user.id, params));
-
+function Kpi({
+  label,
+  value,
+  hint,
+  tone,
+  to,
+  search,
+}: {
+  label: string;
+  value: number | string;
+  hint: string;
+  tone?: "critical";
+  to?: "/invoices" | "/approvals" | "/payments";
+  search?: { status: InvoiceStatusFilter };
+}) {
+  const body = (
+    <>
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dd
+        className={`figure mt-0.5 text-xl font-semibold tracking-tight ${
+          tone === "critical" && value !== 0 ? "text-critical-foreground" : ""
+        }`}
+      >
+        {typeof value === "number" ? <CountUp value={value} /> : value}
+      </dd>
+      <dd className="text-[11px] text-muted-foreground">{hint}</dd>
+    </>
+  );
   return (
-    <section className="surface overflow-hidden" aria-labelledby="all-invoices-heading">
-      <header className="flex flex-wrap items-center gap-3 border-b px-5 py-4">
-        <div className="mr-auto">
-          <h2 id="all-invoices-heading" className="text-[15px] font-semibold tracking-tight">
-            All invoices
-          </h2>
-          <p className="text-xs text-muted-foreground">Search and filter everything you can see.</p>
-        </div>
-        <div className="relative w-full sm:w-64">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
-          <Input
-            aria-label="Search invoices"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Supplier or invoice #"
-            className="h-9 pl-9"
-          />
-        </div>
-        <Select value={status} onValueChange={(v) => setStatus(v as InvoiceStatusFilter)}>
-          <SelectTrigger className="h-9 w-44" aria-label="Filter by status">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {STATUS_FILTERS.map((f) => (
-              <SelectItem key={f} value={f}>
-                {STATUS_FILTER_LABELS[f]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </header>
-      {data.length ? (
-        <InvoiceTable tasks={data} caption="All invoices" />
+    <div className="min-w-0">
+      {to ? (
+        <Link
+          to={to}
+          search={search as never}
+          className="block h-full px-5 py-3.5 transition-colors hover:bg-secondary/60"
+        >
+          {body}
+        </Link>
       ) : (
-        <EmptyState
-          compact
-          icon={SearchX}
-          title="No invoices match"
-          body="Try a different supplier name, invoice number or status."
-        />
+        <div className="px-5 py-3.5">{body}</div>
       )}
+    </div>
+  );
+}
+
+const HELP_STEPS = [
+  {
+    n: 1,
+    title: "Detect",
+    body: "Reads each invoice, suggests GL codes with ML and runs every control check.",
+    to: "/invoices" as const,
+    cta: "Invoice inbox",
+  },
+  {
+    n: 2,
+    title: "Resolve",
+    body: "Opens an evidence-linked case with a safe path to pay; AI investigates read-only.",
+    to: "/investigations" as const,
+    cta: "Investigations",
+  },
+  {
+    n: 3,
+    title: "Settle",
+    body: "The right people approve; an independent person releases a simulated payment.",
+    to: "/payments" as const,
+    cta: "Payments",
+  },
+  {
+    n: 4,
+    title: "Explain",
+    body: "Every step is recorded in a tamper-evident trail you can replay.",
+    to: "/audit" as const,
+    cta: "Audit trail",
+  },
+];
+
+function HowSentinelHelps() {
+  return (
+    <section aria-labelledby="how-heading">
+      <h2 id="how-heading" className="text-sm font-semibold">
+        How Sentinel helps
+      </h2>
+      <ol className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {HELP_STEPS.map((s) => (
+          <li key={s.n}>
+            <Link to={s.to} className="surface lift flex h-full flex-col px-4 py-3.5">
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                <span className="grid size-6 place-items-center rounded-full bg-primary-soft text-xs text-primary">
+                  {s.n}
+                </span>
+                {s.title}
+              </span>
+              <span className="mt-1.5 flex-1 text-xs text-muted-foreground">{s.body}</span>
+              <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                {s.cta} <ArrowRight className="size-3" aria-hidden />
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }

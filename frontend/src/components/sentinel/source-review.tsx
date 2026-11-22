@@ -191,7 +191,7 @@ function StatusChip({ status, confidence }: { status: Status; confidence: number
   );
 }
 
-function usePageImage(actor: string, invoiceId: string, page: number, enabled: boolean) {
+export function usePageImage(actor: string, invoiceId: string, page: number, enabled: boolean) {
   const image = useQuery({
     queryKey: ["invoice-page", actor, invoiceId, page],
     queryFn: () => api.documentPage(actor, invoiceId, page),

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/sentinel/page-header";
 import { QueryState } from "@/components/sentinel/query-state";
 import { Evidence } from "@/components/sentinel/flight-recorder";
@@ -13,6 +13,7 @@ import { actionLabel, describeData, isNotableResult, plain } from "@/lib/plain-l
 import { useSession } from "@/lib/session";
 
 const PAGE_SIZE = 40;
+const FILTERS = ["invoice_id", "actor_id", "action"] as const;
 const auditQuery = (actor: string, query: string, offset: number) =>
   queryOptions({
     queryKey: ["audit", actor, query, offset],
@@ -58,19 +59,34 @@ function Audit() {
 function AuditEvents() {
   const { user, users, permissions } = useSession();
   const [filters, setFilters] = useState("");
+  const [initial, setInitial] = useState<URLSearchParams | null>(null);
   const [offset, setOffset] = useState(0);
+  // Honour filters in the URL (shared links, or a form submitted before the page hydrated).
+  useEffect(() => {
+    const url = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams();
+    for (const name of FILTERS) {
+      const term = url.get(name)?.trim();
+      if (term) params.set(name, term);
+    }
+    if (params.size) {
+      setInitial(params);
+      setFilters(params.toString());
+    }
+  }, []);
   const [chain, setChain] = useState<Awaited<ReturnType<typeof api.verifyAudit>>>();
   const events = useQuery(auditQuery(user.id, filters, offset));
   return (
     <>
       <section className="surface space-y-4 px-5 py-4">
         <form
+          key={initial?.toString() ?? ""}
           className="flex flex-wrap items-end gap-3"
           onSubmit={(event) => {
             event.preventDefault();
             const data = new FormData(event.currentTarget);
             const params = new URLSearchParams();
-            for (const name of ["invoice_id", "actor_id", "action"]) {
+            for (const name of FILTERS) {
               const term = value(data, name);
               if (term) params.set(name, term);
             }
@@ -78,9 +94,24 @@ function AuditEvents() {
             setFilters(params.toString());
           }}
         >
-          <Field label="Invoice ID" name="invoice_id" required={false} />
-          <Field label="Actor ID" name="actor_id" required={false} />
-          <Field label="Action prefix" name="action" required={false} />
+          <Field
+            label="Invoice ID"
+            name="invoice_id"
+            required={false}
+            defaultValue={initial?.get("invoice_id") ?? ""}
+          />
+          <Field
+            label="Actor ID"
+            name="actor_id"
+            required={false}
+            defaultValue={initial?.get("actor_id") ?? ""}
+          />
+          <Field
+            label="Action prefix"
+            name="action"
+            required={false}
+            defaultValue={initial?.get("action") ?? ""}
+          />
           <Button type="submit">Apply filters</Button>
         </form>
         <div className="flex flex-wrap gap-3">
