@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/sidebar";
 import { homeQuery } from "@/lib/api/queries";
 import { useSession } from "@/lib/session";
-import { BrandMark } from "./brand-mark";
+
 
 type NavTo =
   | "/"
@@ -110,15 +110,12 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar">
       <SidebarHeader className="border-b border-sidebar-border px-4 pb-5 pt-6">
         <Link to="/" className="flex items-center gap-3 rounded-lg px-1 py-1">
-          <BrandMark className="size-9 shrink-0" />
-          <div className="min-w-0 leading-tight group-data-[collapsible=icon]:hidden">
-            <p className="text-[15px] font-semibold tracking-[-0.035em] text-foreground">
-              Brim Sentinel
-            </p>
-            <p className="truncate text-[11px] text-muted-foreground">
-              Harborline Logistics
-            </p>
-          </div>
+          <span className="flex min-w-0 items-center gap-2.5 whitespace-nowrap group-data-[collapsible=icon]:hidden" aria-label="brim Sentinel">
+            <span className="text-[25px] font-bold leading-none tracking-[-0.075em] text-[#20164d]">brim</span>
+            <span className="h-6 w-px bg-border-strong" aria-hidden />
+            <span className="text-[16px] font-semibold tracking-[-0.035em] text-[#20164d]">Sentinel</span>
+          </span>
+          <span className="hidden size-9 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white group-data-[collapsible=icon]:flex" aria-hidden>B</span>
         </Link>
       </SidebarHeader>
       <SidebarContent className="px-2 pt-4">
