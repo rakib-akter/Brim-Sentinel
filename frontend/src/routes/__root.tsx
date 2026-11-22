@@ -16,7 +16,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AppShell } from "@/components/app/app-shell";
 import { Toaster } from "@/components/ui/sonner";
 import { identitiesQuery, meQuery } from "@/lib/api/queries";
-import { getDemoActor, SessionProvider } from "@/lib/session";
+import { getDemoActor, SessionProvider, useSession } from "@/lib/session";
 
 function NotFoundComponent() {
   return (
@@ -135,8 +135,10 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function PageTransition({ children }: { children: ReactNode }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const { user } = useSession();
+  // Keyed by path and identity, so switching person on the same page also eases in.
   return (
-    <div key={path} className="page-enter">
+    <div key={`${path}:${user.id}`} className="page-enter">
       {children}
     </div>
   );

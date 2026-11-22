@@ -109,7 +109,7 @@ export function GuidedDemo() {
     if (user.id === step.as || !users.some((u) => u.id === step.as)) {
       router.history.push(step.path);
     } else {
-      setUserId(step.as, step.path);
+      void setUserId(step.as, step.path);
     }
   };
   return (

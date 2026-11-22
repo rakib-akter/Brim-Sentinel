@@ -78,7 +78,7 @@ function IdentityMenu() {
           </p>
         ) : null}
         {users.map((u) => (
-          <DropdownMenuItem key={u.id} onSelect={() => setUserId(u.id)} className="gap-3 py-2">
+          <DropdownMenuItem key={u.id} onSelect={() => void setUserId(u.id)} className="gap-3 py-2">
             <Avatar className="size-7">
               <AvatarFallback className="bg-secondary text-[11px] font-semibold">
                 {u.initials}
