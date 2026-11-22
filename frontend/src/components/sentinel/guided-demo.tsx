@@ -113,17 +113,17 @@ export function GuidedDemo() {
     }
   };
   return (
-    <section className="surface rise-in overflow-hidden" aria-labelledby="guide-heading">
-      <header className="flex flex-wrap items-start gap-3 border-b bg-primary-soft/40 px-5 py-4">
+    <section className="surface rise-in overflow-hidden border-primary/15" aria-labelledby="guide-heading">
+      <header className="flex flex-wrap items-center gap-3 border-b border-border/80 bg-card px-5 py-4 md:px-6">
         <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
           <Sparkles className="size-4" aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
           <h2 id="guide-heading" className="text-[15px] font-semibold tracking-tight">
-            Start here: one invoice from inbox to payment
+            Explore the Sentinel workflow
           </h2>
           <p className="text-xs text-muted-foreground">
-            Five steps. Each one switches to the person allowed to do it. {state.done.length}/
+            Follow an invoice from detection to audit. Each step opens as the authorized demo role. {state.done.length}/
             {STEPS.length} done.
           </p>
         </div>
@@ -161,14 +161,14 @@ export function GuidedDemo() {
           style={{ width: `${(state.done.length / STEPS.length) * 100}%` }}
         />
       </div>
-      <ol className="stagger grid gap-px bg-border sm:grid-cols-5">
+      <ol className="grid gap-px bg-border md:grid-cols-5">
         {STEPS.map((step, i) => {
           const done = state.done.includes(step.id);
           const next = i === nextIndex;
           return (
             <li
               key={step.id}
-              className={`flex flex-col bg-card px-4 py-3 ${next ? "bg-primary-soft/30" : ""}`}
+              className={`flex flex-col bg-card px-4 py-4 transition-colors ${next ? "bg-primary-soft/40" : ""}`}
             >
               <div className="flex items-center gap-2">
                 <span
@@ -184,13 +184,13 @@ export function GuidedDemo() {
                 </span>
                 <span className="eyebrow">{step.stage}</span>
               </div>
-              <p className="mt-2 text-sm font-medium leading-snug">{step.title}</p>
-              <p className="mt-1 flex-1 text-xs text-muted-foreground">{step.body}</p>
-              <p className="mt-2 text-[11px] text-muted-foreground">As {step.asName}</p>
+              <p className="mt-3 text-[13px] font-semibold leading-snug tracking-[-0.01em]">{step.title}</p>
+              <p className="mt-1 flex-1 text-[11px] leading-relaxed text-muted-foreground">{step.body}</p>
+              <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground">As {step.asName}</p>
               <Button
                 size="sm"
                 variant={next ? "default" : "outline"}
-                className="mt-2 self-start"
+                className="mt-3 self-start"
                 onClick={() => go(step)}
               >
                 {done ? "Open again" : "Go"} <ArrowRight aria-hidden />
