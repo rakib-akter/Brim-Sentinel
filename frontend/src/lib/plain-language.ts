@@ -168,7 +168,7 @@ function sentence(code: string): string {
     .replaceAll(/\b(po|gl|id|fx|eft|cad|usd|gst|hst|pst|qst|ocr|pdf|ap)\b/g, (w) =>
       w.toUpperCase(),
     );
-  return words ? words[0].toUpperCase() + words.slice(1) : "";
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 /** A friendly label for any status, state, role, channel or action code. */
@@ -200,7 +200,7 @@ export function evidenceLabel(item: unknown): string {
 
 /** "get_bank_changes#2" → "Read the bank change history". */
 export function lookupLabel(ref: string): string {
-  const tool = ref.split("#")[0];
+  const tool = ref.split("#")[0] ?? ref;
   return LOOKUP[tool] ?? sentence(tool);
 }
 
