@@ -71,6 +71,7 @@ function OverviewPage() {
           ) : null
         }
       />
+      <GuidedDemo />
       <Suspense fallback={<OverviewSkeleton />}>
         <OverviewContent />
       </Suspense>
@@ -249,7 +250,6 @@ function OverviewContent() {
         </div>
       </div>
 
-      <GuidedDemo />
       <details className="group border-t border-border/80 pt-5">
         <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">How Sentinel works · Detect, Resolve, Settle, Explain</summary>
         <div className="mt-5"><HowSentinelHelps /></div>
