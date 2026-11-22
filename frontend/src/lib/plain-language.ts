@@ -257,3 +257,32 @@ const ACTION: Record<string, string> = {
 export function actionLabel(action: string): string {
   return ACTION[action] ?? sentence(action);
 }
+
+/** Where an evidence reference can be opened in the app, if anywhere. */
+export type EvidenceTarget =
+  | { kind: "invoice"; invoiceId: string }
+  | { kind: "vendor"; vendorId: string }
+  | null;
+
+const INVOICE_ID = /^(AP-\d+|IN-[A-Z0-9-]+)$/;
+const VENDOR_ID = /^V\d{3,}$/;
+
+export function evidenceTarget(item: unknown): EvidenceTarget {
+  if (typeof item === "string") {
+    return INVOICE_ID.test(item) ? { kind: "invoice", invoiceId: item } : null;
+  }
+  if (!item || typeof item !== "object") return null;
+  const e = item as Record<string, unknown>;
+  const ref = typeof e["ref"] === "string" ? e["ref"] : typeof e["id"] === "string" ? e["id"] : "";
+  const type = typeof e["type"] === "string" ? e["type"] : "";
+  if ((type === "vendor" || type === "vendor_master") && VENDOR_ID.test(ref))
+    return { kind: "vendor", vendorId: ref };
+  if (type === "invoice" && INVOICE_ID.test(ref)) return { kind: "invoice", invoiceId: ref };
+  for (const key of ["invoice_id", "matched_invoice_id"]) {
+    const v = e[key];
+    if (typeof v === "string" && INVOICE_ID.test(v)) return { kind: "invoice", invoiceId: v };
+  }
+  if (typeof e["vendor_id"] === "string" && VENDOR_ID.test(e["vendor_id"]))
+    return { kind: "vendor", vendorId: e["vendor_id"] };
+  return null;
+}

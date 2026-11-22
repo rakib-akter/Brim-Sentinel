@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   actionLabel,
   describeData,
+  evidenceTarget,
   evidenceLabel,
   isNotableResult,
   lookupLabel,
@@ -50,5 +51,20 @@ describe("plain-language", () => {
     expect(isNotableResult("SUCCESS")).toBe(false);
     expect(isNotableResult("INFO")).toBe(false);
     expect(isNotableResult("DENIED")).toBe(true);
+  });
+});
+
+describe("evidenceTarget", () => {
+  it("links invoices and suppliers, nothing else", () => {
+    expect(evidenceTarget({ type: "vendor", ref: "V004" })).toEqual({
+      kind: "vendor",
+      vendorId: "V004",
+    });
+    expect(evidenceTarget("AP-00277")).toEqual({ kind: "invoice", invoiceId: "AP-00277" });
+    expect(
+      evidenceTarget({ type: "card_transaction", ref: "CT-00391", invoice_id: "AP-00277" }),
+    ).toEqual({ kind: "invoice", invoiceId: "AP-00277" });
+    expect(evidenceTarget({ type: "contract", ref: "C020" })).toBeNull();
+    expect(evidenceTarget("get_bank_changes#2")).toBeNull();
   });
 });

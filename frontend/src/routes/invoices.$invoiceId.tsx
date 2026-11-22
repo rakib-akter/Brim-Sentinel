@@ -1,14 +1,12 @@
-import { Suspense, useCallback } from "react";
+import { Suspense } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
-  ArrowRight,
   CheckCircle2,
   ChevronDown,
   CircleDashed,
   CircleHelp,
-  FileText,
   Lock,
   MinusCircle,
   PauseCircle,
@@ -30,14 +28,14 @@ import { api } from "@/lib/api/client";
 import { ResolutionCase } from "@/components/sentinel/resolution-case";
 import { ApprovalDecision, InvoiceCorrections } from "@/components/sentinel/invoice-actions";
 import { Evidence, FlightRecorder } from "@/components/sentinel/flight-recorder";
-import { PaymentWorkflow } from "@/components/sentinel/payment-workflow";
 import {
-  downloadFile,
-  Field,
-  humanize,
-  value,
-  WorkflowForm,
-} from "@/components/sentinel/workflow-form";
+  CodingPanel,
+  DocumentPanel,
+  ProgressRail,
+  SentinelAnalysis,
+} from "@/components/sentinel/invoice-workspace";
+import { PaymentWorkflow } from "@/components/sentinel/payment-workflow";
+import { Field, humanize, value, WorkflowForm } from "@/components/sentinel/workflow-form";
 import type { InvoiceDetail as InvoiceView } from "@/lib/domain/types";
 import type { InvoiceDetail as InvoiceRecord } from "@/lib/api/schema";
 import { invoiceQuery } from "@/lib/api/queries";
@@ -105,100 +103,7 @@ function InvoiceContent() {
   }
 
   const record = data.record;
-  return (
-    <div className="space-y-6">
-      <ReviewHeader detail={data} />
-      {record.vendor_id && (
-        <Link
-          className="inline-block text-sm font-medium text-primary hover:underline"
-          to="/vendors"
-          search={{ vendorId: record.vendor_id, q: "", status: "" }}
-        >
-          View supplier profile
-        </Link>
-      )}
-      <div className="grid items-start gap-6 lg:grid-cols-5">
-        <div className="space-y-6 lg:col-span-3">
-          {record.resolution_cases.length > 0 && (
-            <section id="resolution" className="space-y-3">
-              <h2 className="font-semibold">Resolution cases</h2>
-              {record.resolution_cases.map((item) => (
-                <ResolutionCase key={item.id} id={item.id} />
-              ))}
-            </section>
-          )}
-          {data.invoice.findings.map((f) => (
-            <div key={f.id ?? f.code} className="space-y-2">
-              <FindingCard finding={f} />
-              {f.id &&
-                record.allowed_actions.includes("dismiss_finding") &&
-                record.validation_findings.some(
-                  (finding) => finding.id === f.id && finding.dismissible,
-                ) && (
-                  <details className="surface px-5 py-4 text-sm">
-                    <summary className="cursor-pointer">Document dismissal</summary>
-                    <WorkflowForm
-                      label="Dismiss finding"
-                      run={(fields) =>
-                        api.dismiss(user.id, invoiceId, f.id!, {
-                          expected_version: record.version,
-                          reason: value(fields, "reason"),
-                        })
-                      }
-                    >
-                      <Field name="reason" label="Evidence-backed reason" />
-                    </WorkflowForm>
-                  </details>
-                )}
-            </div>
-          ))}
-          <DocumentPreview detail={data} />
-          <FlightRecorder invoiceId={invoiceId} />
-        </div>
-        <div className="space-y-6 lg:col-span-2">
-          <ExtractedDetails detail={data} />
-          <ChecksPanel detail={data} />
-          <div id="approval" className="space-y-3">
-            <ApprovalPanel detail={data} />
-            {record.allowed_actions.some(
-              (action) => action === "approve" || action === "reject",
-            ) && (
-              <div className="surface px-5 py-4">
-                <ApprovalDecision key={record.version} invoice={record} />
-              </div>
-            )}
-          </div>
-          <PaymentWorkflow invoice={record} />
-          <InvoiceCorrections key={record.version} invoice={record} />
-          <details className="surface px-5 py-4 text-sm">
-            <summary className="cursor-pointer font-semibold">
-              Version history and supporting records
-            </summary>
-            <ul className="mt-2 space-y-2">
-              {record.versions.map((version) => (
-                <li key={version.version}>
-                  Version {version.version} · {version.reason} · {version.created_by} ·{" "}
-                  {formatDate(version.created_at)}
-                </li>
-              ))}
-              {record.duplicate_candidates.map((candidate) => (
-                <li key={candidate.id}>
-                  {candidate.match_type} ·{" "}
-                  {candidate.matched_card_txn_id ?? candidate.matched_invoice_id} ·{" "}
-                  {candidate.reasons.join(", ")}
-                </li>
-              ))}
-            </ul>
-          </details>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ReviewHeader({ detail }: { detail: InvoiceDetail }) {
-  const { invoice: inv, action, plainStatus } = detail;
-  const blocking = inv.findings.find((f) => f.blocking);
+  const { action } = data;
   const target =
     action.kind === "approve"
       ? "approval"
@@ -207,6 +112,155 @@ function ReviewHeader({ detail }: { detail: InvoiceDetail }) {
         : ["prepare_payment", "release_payment", "simulate_settlement"].includes(action.kind)
           ? "payment"
           : null;
+  const rawRefs = (id: string | undefined) =>
+    record.validation_findings.find((f) => f.id === id)?.evidence_refs ?? [];
+  return (
+    <div className="space-y-4">
+      <ReviewHeader detail={data} />
+      <ProgressRail record={record} />
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+        <div className="xl:sticky xl:top-4">
+          <DocumentPanel
+            invoiceId={invoiceId}
+            fileName={data.invoice.fileName}
+            scanned={data.invoice.scanned}
+          />
+        </div>
+        <div className="min-w-0 space-y-6">
+          {/* 1 · Detect */}
+          <SentinelAnalysis
+            record={record}
+            findings={data.invoice.findings}
+            plainStatus={data.plainStatus}
+            actionLabel={action.label}
+            actionTarget={target}
+          />
+          <ExtractedDetails detail={data} />
+          <CodingPanel key={record.version} record={record} />
+          <ChecksPanel detail={data} />
+
+          {/* 2 · Resolve */}
+          <section id="resolution" className="scroll-mt-4 space-y-3">
+            <StageHeading
+              n={2}
+              title="Resolve"
+              note="Issues Sentinel found and the safe way through them."
+            />
+            {data.invoice.findings.length === 0 && record.resolution_cases.length === 0 && (
+              <p className="surface px-5 py-4 text-sm text-muted-foreground">
+                Nothing to resolve. All blocking checks passed.
+              </p>
+            )}
+            {record.resolution_cases.map((item) => (
+              <ResolutionCase key={item.id} id={item.id} />
+            ))}
+            {data.invoice.findings.map((f) => (
+              <div key={f.id ?? f.code} className="space-y-2">
+                <FindingCard finding={f} refs={rawRefs(f.id)} />
+                {f.id &&
+                  record.allowed_actions.includes("dismiss_finding") &&
+                  record.validation_findings.some(
+                    (finding) => finding.id === f.id && finding.dismissible,
+                  ) && (
+                    <details className="surface px-5 py-4 text-sm">
+                      <summary className="cursor-pointer">Document dismissal</summary>
+                      <WorkflowForm
+                        label="Dismiss finding"
+                        run={(fields) =>
+                          api.dismiss(user.id, invoiceId, f.id!, {
+                            expected_version: record.version,
+                            reason: value(fields, "reason"),
+                          })
+                        }
+                      >
+                        <Field name="reason" label="Evidence-backed reason" />
+                      </WorkflowForm>
+                    </details>
+                  )}
+              </div>
+            ))}
+          </section>
+
+          {/* 3 · Settle */}
+          <section id="settle" className="scroll-mt-4 space-y-3">
+            <StageHeading
+              n={3}
+              title="Settle"
+              note="Approvals by the right people, then an independent simulated release."
+            />
+            <div id="approval" className="space-y-3">
+              <ApprovalPanel detail={data} />
+              {record.allowed_actions.some(
+                (action) => action === "approve" || action === "reject",
+              ) && (
+                <div className="surface px-5 py-4">
+                  <ApprovalDecision key={record.version} invoice={record} />
+                </div>
+              )}
+            </div>
+            <PaymentWorkflow invoice={record} />
+            <InvoiceCorrections key={record.version} invoice={record} />
+          </section>
+
+          {/* 4 · Explain */}
+          <section id="explain" className="scroll-mt-4 space-y-3">
+            <StageHeading
+              n={4}
+              title="Explain"
+              note="Every recorded step, who did it and the evidence behind it."
+            />
+            <FlightRecorder invoiceId={invoiceId} />
+            {record.vendor_id && (
+              <Link
+                className="inline-block text-sm font-medium text-primary hover:underline"
+                to="/vendors"
+                search={{ vendorId: record.vendor_id, q: "", status: "" }}
+              >
+                View supplier profile
+              </Link>
+            )}
+            <details className="surface px-5 py-4 text-sm">
+              <summary className="cursor-pointer font-semibold">
+                Version history and supporting records
+              </summary>
+              <ul className="mt-2 space-y-2">
+                {record.versions.map((version) => (
+                  <li key={version.version}>
+                    Version {version.version} · {version.reason} · {version.created_by} ·{" "}
+                    {formatDate(version.created_at)}
+                  </li>
+                ))}
+                {record.duplicate_candidates.map((candidate) => (
+                  <li key={candidate.id}>
+                    {humanize(candidate.match_type)} ·{" "}
+                    {candidate.matched_card_txn_id ?? candidate.matched_invoice_id} ·{" "}
+                    {candidate.reasons.join(", ")}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StageHeading({ n, title, note }: { n: number; title: string; note: string }) {
+  return (
+    <header className="pt-2">
+      <h2 className="text-base font-semibold tracking-tight">
+        <span className="text-muted-foreground">{n} · </span>
+        {title}
+      </h2>
+      <p className="text-xs text-muted-foreground">{note}</p>
+    </header>
+  );
+}
+
+function ReviewHeader({ detail }: { detail: InvoiceDetail }) {
+  const { invoice: inv, plainStatus } = detail;
+  const blocking = inv.findings.find((f) => f.blocking);
 
   return (
     <section className="surface overflow-hidden">
@@ -268,20 +322,12 @@ function ReviewHeader({ detail }: { detail: InvoiceDetail }) {
               : (inv.findings[0]?.whyItMatters ?? `Owner: ${detail.owner}.`)}
           </p>
         </div>
-        {target && (
-          <Button asChild>
-            <a href={`#${target}`}>
-              {action.label}
-              <ArrowRight aria-hidden />
-            </a>
-          </Button>
-        )}
       </div>
     </section>
   );
 }
 
-function FindingCard({ finding }: { finding: Finding }) {
+function FindingCard({ finding, refs }: { finding: Finding; refs: unknown[] }) {
   const tone =
     finding.severity === "high"
       ? "border-l-critical"
@@ -321,107 +367,17 @@ function FindingCard({ finding }: { finding: Finding }) {
           />
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-            {finding.evidenceIds.map((label, i) => (
-              <li key={`${i}-${label}`} className="flex gap-1.5">
-                <span aria-hidden>•</span>
-                <span>{label}</span>
-              </li>
-            ))}
-            {finding.evidenceIds.length === 0 && <li>No supporting records attached.</li>}
-          </ul>
+          {refs.length > 0 ? (
+            <Evidence items={refs} />
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">No supporting records attached.</p>
+          )}
           <p className="mt-2 text-[11px] text-muted-foreground/80">
             Check: {humanize(finding.code)}
           </p>
         </CollapsibleContent>
       </Collapsible>
     </article>
-  );
-}
-
-function DocumentPreview({ detail }: { detail: InvoiceDetail }) {
-  const { invoice } = detail;
-  const { user } = useSession();
-  return (
-    <section className="surface space-y-3 px-5 py-4">
-      <h2 className="flex items-center gap-2 text-sm font-semibold">
-        <FileText className="size-4" aria-hidden />
-        Source document
-      </h2>
-      <p className="break-all text-sm text-muted-foreground">
-        {invoice.fileName ?? "No file attached"}
-      </p>
-      {invoice.fileName && (
-        <>
-          <Collapsible>
-            <CollapsibleTrigger className="text-sm font-medium text-primary">
-              Preview original
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <OriginalPreview actor={user.id} invoiceId={invoice.id} scanned={invoice.scanned} />
-            </CollapsibleContent>
-          </Collapsible>
-          <WorkflowForm
-            label="Download original"
-            refresh={false}
-            success=""
-            run={async () => {
-              downloadFile(await api.document(user.id, invoice.id), invoice.fileName!);
-            }}
-          />
-        </>
-      )}
-    </section>
-  );
-}
-
-function OriginalPreview({
-  actor,
-  invoiceId,
-  scanned,
-}: {
-  actor: string;
-  invoiceId: string;
-  scanned: boolean;
-}) {
-  const preview = useQuery({
-    queryKey: ["invoice-document", actor, invoiceId],
-    queryFn: () => api.document(actor, invoiceId),
-  });
-  const attachSource = useCallback(
-    (element: HTMLImageElement | HTMLIFrameElement | null) => {
-      if (!element || !preview.data) return;
-      const url = URL.createObjectURL(preview.data);
-      element.src = url;
-      return () => URL.revokeObjectURL(url);
-    },
-    [preview.data],
-  );
-
-  if (preview.error)
-    return (
-      <p role="alert" className="mt-2 text-sm">
-        {preview.error.message}
-      </p>
-    );
-  if (!preview.data)
-    return (
-      <p role="status" className="mt-2 text-sm">
-        Loading source document…
-      </p>
-    );
-  return scanned ? (
-    <img
-      ref={attachSource}
-      alt="Original invoice scan"
-      className="mt-2 max-h-[65vh] rounded-md object-contain"
-    />
-  ) : (
-    <iframe
-      ref={attachSource}
-      title="Original invoice PDF"
-      className="mt-2 h-[65vh] w-full rounded-md border"
-    />
   );
 }
 
@@ -441,7 +397,7 @@ function ExtractedDetails({ detail }: { detail: InvoiceDetail }) {
   return (
     <section className="surface px-5 py-4" aria-labelledby="extracted-heading">
       <h2 id="extracted-heading" className="text-sm font-semibold">
-        Invoice details
+        Extracted details
       </h2>
       <dl className="mt-2 divide-y">
         <Row label="Supplier">{inv.supplierName}</Row>
@@ -489,35 +445,15 @@ function ExtractedDetails({ detail }: { detail: InvoiceDetail }) {
           </Row>
         ) : null}
       </dl>
-      {record && (
-        <details className="mt-3 text-sm">
-          <summary className="cursor-pointer font-medium">Extraction and line coding</summary>
-          <p className="mt-2 text-muted-foreground">Details {humanize(record.provenance)}</p>
-          {record.uncertain_fields.length > 0 && (
-            <p>Needs review · {record.uncertain_fields.map(humanize).join(", ")}</p>
-          )}
-          <ul className="mt-2 divide-y">
-            {record.line_items.map((line) => (
-              <li key={line.line_no} className="py-2">
-                <p>
-                  {line.line_no} · {line.description}
-                </p>
-                <p className="text-muted-foreground">
-                  {line.quantity} units ·{" "}
-                  <Money minor={line.amount_minor} currency={inv.currency} /> ·{" "}
-                  {line.gl_account ?? "Uncoded"}
-                  {line.gl_name ? ` · ${line.gl_name}` : ""} · {line.department_id ?? "Unassigned"}
-                </p>
-                {line.coding_confidence && (
-                  <p className="text-muted-foreground">
-                    Coding confidence {Number(line.coding_confidence) * 100}% · {line.coding_status}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
+      <p className="mt-3 text-xs text-muted-foreground">
+        Details {humanize(record.provenance)}
+        {record.uncertain_fields.length > 0 && (
+          <span className="text-warning-foreground">
+            {" "}
+            · needs a person: {record.uncertain_fields.map(humanize).join(", ")}
+          </span>
+        )}
+      </p>
       {record.anomaly && (
         <details className="mt-3 text-sm">
           <summary className="cursor-pointer font-medium">Review priority</summary>

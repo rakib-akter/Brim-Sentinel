@@ -1,5 +1,6 @@
 import { useRef, useState, type DragEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { FileUp, Loader2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ function validate(file: File): string | null {
 export function UploadInvoiceDialog({ trigger }: { trigger?: React.ReactNode }) {
   const { user } = useSession();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
@@ -49,10 +51,12 @@ export function UploadInvoiceDialog({ trigger }: { trigger?: React.ReactNode }) 
     mutationFn: async () => {
       let completed = 0;
       let created = 0;
+      const invoiceIds: string[] = [];
       for (const file of files) {
         try {
           const result = await api.upload(user.id, file);
           if (result.created) created++;
+          invoiceIds.push(result.invoice.id);
           completed++;
         } catch (error) {
           setFiles(files.slice(completed));
@@ -61,7 +65,7 @@ export function UploadInvoiceDialog({ trigger }: { trigger?: React.ReactNode }) 
           );
         }
       }
-      return { completed, created };
+      return { completed, created, invoiceIds };
     },
     onSettled: async () => {
       await Promise.all([
@@ -69,8 +73,9 @@ export function UploadInvoiceDialog({ trigger }: { trigger?: React.ReactNode }) 
         qc.invalidateQueries({ queryKey: ["home"] }),
       ]);
     },
-    onSuccess: ({ completed, created }) => {
+    onSuccess: ({ completed, created, invoiceIds }) => {
       const reused = completed - created;
+      const single = invoiceIds.length === 1 ? invoiceIds[0] : undefined;
       toast.success(
         created
           ? `${created} ${created === 1 ? "draft" : "drafts"} created`
@@ -78,11 +83,27 @@ export function UploadInvoiceDialog({ trigger }: { trigger?: React.ReactNode }) 
         {
           description: reused
             ? `${reused} ${reused === 1 ? "file was" : "files were"} already received.`
-            : "Review the invoices and their checks in the inbox.",
+            : single
+              ? "Opening it so you can review what Sentinel found."
+              : "Review the invoices and their checks in the inbox.",
+          ...(single
+            ? {}
+            : {
+                action: {
+                  label: "Open first",
+                  onClick: () =>
+                    void navigate({
+                      to: "/invoices/$invoiceId",
+                      params: { invoiceId: invoiceIds[0] ?? "" },
+                    }),
+                },
+              }),
         },
       );
       setFiles([]);
       setOpen(false);
+      // One file: go straight to its review so the result of processing is visible immediately.
+      if (single) void navigate({ to: "/invoices/$invoiceId", params: { invoiceId: single } });
     },
     onError: (error) => setError(error.message),
   });

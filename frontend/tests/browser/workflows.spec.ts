@@ -82,7 +82,7 @@ test("Detect → Resolve → Settle → Explain using seeded FastAPI records", a
   await page.goto("/audit");
   await page.getByLabel("Invoice ID", { exact: true }).fill(invoiceId);
   await page.getByRole("button", { name: "Apply filters" }).click();
-  await expect(page.getByText(/payment · simulated settled/)).toBeVisible();
+  await expect(page.getByText(/Payment settled \(simulated\)/)).toBeVisible();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download filtered CSV" }).click();
   expect((await download).suggestedFilename()).toBe("brim_audit.csv");
@@ -92,11 +92,12 @@ test("intake creates one draft and reports an already received file", async ({ p
   const file = fileURLToPath(
     new URL("../../../data/brim_ap_dataset/incoming_invoices/Invoice 000809.pdf", import.meta.url),
   );
-  await page.goto("/invoices");
   for (const label of ["1 draft created", "Invoices already in the inbox"]) {
+    await page.goto("/invoices");
     await page.getByRole("button", { name: "Upload invoice", exact: true }).click();
     await page.getByLabel("Choose invoice files").setInputFiles(file);
     await page.getByRole("button", { name: "Upload 1", exact: true }).click();
     await expect(page.getByText(label, { exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/invoices\/[^/]+$/); // one file → its review opens
   }
 });
