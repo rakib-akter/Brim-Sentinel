@@ -1,0 +1,60 @@
+{
+ "content": [
+  {
+   "type": "thinking",
+   "thinking": "",
+   "signature": "CAQS6wgKEAgUGAI4AUIIdGhpbmtpbmcSDCCdhhwGYs/zccQUwBoMxXdk+DdwLHOCdtgPIjDGTi/aaTCjyk/OLWp7e3aBvC51+SUmrniKd9gfebjsTLQs/foRLfp48pPBS1penzoqiAihr130rdcqc7dNkopkCMOhNAaK+TlSVphVMDBCG6RlbOXhU0uwWm1+CEvSsV29orlFbmtatbI3iqUUFDEoCar2n50rQW9ygIeBxJOyE4OKdSZE5MF1iBsSp9t1M3zBvWGRqxpR9vFg3EXeDAJxcEoWR130qxR9ZzLLVbP/bNTY7t8S8Igm3cMP5kulZHtnUGxQYj+54HAy3BMeLPghI9Gx0ObA2VmXTY38G5Kj445j3Ov3kHrPG0Xy/M9JYUI8BBzXy7/LM/IuIJdxkj4BDriyfvIELs4PemrN8IUUQWy647lsWMXLfmPaYnBVNLlgE5Jv/pZ+TnBoQSmDZPztIgcwpy4r5+E4Sl3xhDPxJCHLEhR8S3Ln9Jq+N8hHxyVpRV8pH5PbVUj91IfCRlSwhukaxsV0tBSLGwRdG5d4DbP+20+SYueuuOc+hhkr+kFc56yTpFSkUQQpvpM+y3YhT+5vuqye4xpHTBrDH9jmeHEyUgnKnHbT8VgOZmshjGlhx3PmjEFahv2fft/AyJAx7hE87bugStwfIY8DoafZfYL9VKXeVsygj/Mi2OEhlHdXJDOi+jLl9a/sC3R9yLJk9JSiG1bYp82uQsf4E5WylWqIZsHU7CIblwe69Hp2aYMJseDstwxIopV5biX+hY6yOiXn7Pw/dzbO91age8qpHq1C+AR/2sy/TdTufUiRfDKWa/eVnyE5MNfiYbZqQrma/MLmBXrzvGLCQKQNzHF8UxYofzDAMjrFfxTz4jW+34+IAqS/r/YRQLdnyCnPR8XW54ds1q9bY+iGRPpcsKI3ZNWv3YWPGwg/SLcsZOXCljW+de73rWpxaZObE+ghn7ivQEPZLygN7SpAs66WLoHb7RhnS+VlbFGsC8V1EL2C50M0k5S9qo73UhlzXLLXwdeN1RLAZZd8HlQf0kceWiVYIJk4VoJlQYr49UIWgqGRu8PE2KT98hyT7Z/hNyLkr5Oz/G3QVSwPfxE6HZhGQmsO0wZ6SSKkATWmNszLxYSbXIHRTymakaNMVqa1VcLtB6nz9S7Mdlnp8ZnIj/OjGzh97sYhGeCv2z62B6RXFoDKfG0yAIJt1NOznfxxJCYl1EReW7H4kGaCBGJ3iAWrRwcI3Ixqjgi4Tjx+2UEq3NgsP8JWsOW3tFZ+q8PNRZIFefiinT2a9gIuZUWBu9iRAQij6xNJ7qlrKv/i8uqcAE1o7ZUmYAXat5RcEuZTaHBxfUgRvsTbWuGb06RP2oiwuqjVseyJKRp5kk2WY+3+cu50ryELuxKF4BQ4heHZeVSH7ymSbiZ3C7kYmK0lxqZhvM7l0e0HgoLX3BC1udqHGwVlfWGYmMcQbpkAipPMmJ+ngDWBv7PI5IuVX72DX5gYAQ=="
+  },
+  {
+   "type": "tool_use",
+   "id": "toolu_01Xf5XBCod69a5mDaN52sK4h",
+   "name": "get_vendor_profile",
+   "input": {
+    "vendor_id": "V015"
+   },
+   "caller": {
+    "type": "direct"
+   }
+  },
+  {
+   "type": "tool_use",
+   "id": "toolu_01VGaRCtkXpMzGSPLii7RYo4",
+   "name": "get_contract_terms",
+   "input": {
+    "vendor_id": "V015"
+   },
+   "caller": {
+    "type": "direct"
+   }
+  },
+  {
+   "type": "tool_use",
+   "id": "toolu_014KefzqHYXTRPvZxReM3oB3",
+   "name": "get_approval_history",
+   "input": {
+    "invoice_id": "IN-EM-045-1"
+   },
+   "caller": {
+    "type": "direct"
+   }
+  }
+ ],
+ "stop_reason": "tool_use",
+ "usage": {
+  "input_tokens": 4643,
+  "cache_creation_input_tokens": 0,
+  "cache_read_input_tokens": 0,
+  "cache_creation": {
+   "ephemeral_5m_input_tokens": 0,
+   "ephemeral_1h_input_tokens": 0
+  },
+  "output_tokens": 386,
+  "output_tokens_details": {
+   "thinking_tokens": 216
+  },
+  "service_tier": "standard",
+  "inference_geo": "global",
+  "speed": "standard"
+ },
+ "model": "claude-sonnet-5-5"
+}

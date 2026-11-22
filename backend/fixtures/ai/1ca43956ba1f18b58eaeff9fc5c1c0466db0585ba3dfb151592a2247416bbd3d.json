@@ -1,0 +1,55 @@
+{
+ "content": [
+  {
+   "type": "tool_use",
+   "id": "toolu_01XZhSo63suA97XczCwmJe4f",
+   "name": "get_vendor_profile",
+   "input": {
+    "vendor_id": "V017"
+   },
+   "caller": {
+    "type": "direct"
+   }
+  },
+  {
+   "type": "tool_use",
+   "id": "toolu_01NHwxeLJoZ2Fg2wotMixSEH",
+   "name": "find_related_invoices",
+   "input": {
+    "vendor_id": "V017"
+   },
+   "caller": {
+    "type": "direct"
+   }
+  },
+  {
+   "type": "tool_use",
+   "id": "toolu_0178qYqRm25am1QJxn8BfgtL",
+   "name": "get_approval_history",
+   "input": {
+    "invoice_id": "IN-EM-055-1"
+   },
+   "caller": {
+    "type": "direct"
+   }
+  }
+ ],
+ "stop_reason": "tool_use",
+ "usage": {
+  "input_tokens": 2602,
+  "cache_creation_input_tokens": 0,
+  "cache_read_input_tokens": 0,
+  "cache_creation": {
+   "ephemeral_5m_input_tokens": 0,
+   "ephemeral_1h_input_tokens": 0
+  },
+  "output_tokens": 169,
+  "output_tokens_details": {
+   "thinking_tokens": 0
+  },
+  "service_tier": "standard",
+  "inference_geo": "global",
+  "speed": "standard"
+ },
+ "model": "claude-sonnet-5-5"
+}
