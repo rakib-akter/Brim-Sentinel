@@ -26,7 +26,7 @@ export const Route = createFileRoute("/investigations")({
 });
 
 function Investigations() {
-  const { user } = useSession();
+  const { user, users } = useSession();
   const search = Route.useSearch();
   const cases = useQuery(casesQuery(user.id, !search.history));
   return (
@@ -65,8 +65,11 @@ function Investigations() {
                 {item.title}
               </Link>
               <p className="text-muted-foreground">
-                {item.id} · {item.invoice_id} · {humanize(item.state)} ·{" "}
-                {item.owner_id ?? humanize(item.owner_role)}
+                {humanize(item.state)} · Owner:{" "}
+                {item.owner_id
+                  ? (users.find((u) => u.id === item.owner_id)?.name ?? humanize(item.owner_role))
+                  : humanize(item.owner_role)}{" "}
+                · Invoice {item.invoice_id}
               </p>
             </li>
           ))}

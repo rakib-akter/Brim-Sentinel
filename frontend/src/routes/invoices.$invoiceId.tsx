@@ -31,7 +31,13 @@ import { ResolutionCase } from "@/components/sentinel/resolution-case";
 import { ApprovalDecision, InvoiceCorrections } from "@/components/sentinel/invoice-actions";
 import { Evidence, FlightRecorder } from "@/components/sentinel/flight-recorder";
 import { PaymentWorkflow } from "@/components/sentinel/payment-workflow";
-import { downloadFile, Field, value, WorkflowForm } from "@/components/sentinel/workflow-form";
+import {
+  downloadFile,
+  Field,
+  humanize,
+  value,
+  WorkflowForm,
+} from "@/components/sentinel/workflow-form";
 import type { InvoiceDetail as InvoiceView } from "@/lib/domain/types";
 import type { InvoiceDetail as InvoiceRecord } from "@/lib/api/schema";
 import { invoiceQuery } from "@/lib/api/queries";
@@ -315,19 +321,18 @@ function FindingCard({ finding }: { finding: Finding }) {
           />
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {finding.evidenceIds.map((id) => (
-              <span
-                key={id}
-                className="figure rounded-md border bg-background px-2 py-0.5 font-mono text-[11px] text-muted-foreground"
-              >
-                {id}
-              </span>
+          <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+            {finding.evidenceIds.map((label, i) => (
+              <li key={`${i}-${label}`} className="flex gap-1.5">
+                <span aria-hidden>•</span>
+                <span>{label}</span>
+              </li>
             ))}
-            <span className="figure rounded-md bg-secondary px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
-              rule {finding.code}
-            </span>
-          </div>
+            {finding.evidenceIds.length === 0 && <li>No supporting records attached.</li>}
+          </ul>
+          <p className="mt-2 text-[11px] text-muted-foreground/80">
+            Check: {humanize(finding.code)}
+          </p>
         </CollapsibleContent>
       </Collapsible>
     </article>
@@ -487,11 +492,9 @@ function ExtractedDetails({ detail }: { detail: InvoiceDetail }) {
       {record && (
         <details className="mt-3 text-sm">
           <summary className="cursor-pointer font-medium">Extraction and line coding</summary>
-          <p className="mt-2 text-muted-foreground">
-            Source {record.provenance.replaceAll("_", " ")}
-          </p>
+          <p className="mt-2 text-muted-foreground">Details {humanize(record.provenance)}</p>
           {record.uncertain_fields.length > 0 && (
-            <p>Needs review · {record.uncertain_fields.join(", ")}</p>
+            <p>Needs review · {record.uncertain_fields.map(humanize).join(", ")}</p>
           )}
           <ul className="mt-2 divide-y">
             {record.line_items.map((line) => (

@@ -1,4 +1,5 @@
 import type { InvoiceStatus, InvoiceTask, InvoiceDetail, RoleId, User } from "@/lib/domain/types";
+import { evidenceLabel } from "@/lib/plain-language";
 import type * as Schema from "./schema";
 
 export function roleLabelId(role: string, title = ""): RoleId {
@@ -126,7 +127,7 @@ export function presentDetail(row: Schema.InvoiceDetail): InvoiceDetail {
           title: f.title,
           whyItMatters: f.why_it_matters ?? f.rationale,
           whatHappensNext: f.next_action ?? f.rationale,
-          evidenceIds: f.evidence_refs.map((e) => JSON.stringify(e)),
+          evidenceIds: f.evidence_refs.map(evidenceLabel),
         })),
       approvalChain: row.approval_chain.map((step) => ({
         order: step.step_index,

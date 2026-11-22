@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api/client";
 import type { InvestigationOut } from "@/lib/api/schema";
 import { useSession } from "@/lib/session";
-import { errorMessage, humanize } from "./workflow-form";
+import { lookupLabel, plain } from "@/lib/plain-language";
+import { errorMessage } from "./workflow-form";
 
 /**
  * Runs the bounded, read-only investigation for a case and shows its cited summary.
@@ -53,8 +54,10 @@ function Result({ out }: { out: InvestigationOut }) {
     <div className="mt-3 space-y-3">
       <p className="text-xs text-muted-foreground">
         {byModel
-          ? `Written by ${out.model ?? "the model"} and fact-checked against the lookups below.`
-          : "Standard explanation built from the rule results (AI off, unavailable or its answer failed the fact check)."}
+          ? out.replayed
+            ? `Replayed from a recorded run of ${out.model ?? "the AI model"}, fact-checked against the evidence below.`
+            : `Live answer from ${out.model ?? "the AI model"}, fact-checked against the evidence below.`
+          : "Standard explanation built from the rule results (AI is off or unavailable, or its answer didn't pass the fact check)."}
         {!out.complete && " Incomplete: the lookup budget ran out."}
       </p>
       <p className="leading-relaxed">{out.summary}</p>
@@ -63,7 +66,7 @@ function Result({ out }: { out: InvestigationOut }) {
           <p className="font-medium">Suggested next steps (proposals only)</p>
           <ul className="list-disc pl-5">
             {out.proposed_actions.map((a) => (
-              <li key={a}>{humanize(a)}</li>
+              <li key={a}>{plain(a)}</li>
             ))}
           </ul>
         </div>
@@ -80,23 +83,46 @@ function Result({ out }: { out: InvestigationOut }) {
       )}
       <details>
         <summary className="cursor-pointer text-muted-foreground">
-          {out.lookups.length} read-only lookups
-          {out.ai_cost_usd != null && ` · AI cost USD ${out.ai_cost_usd.toFixed(4)}`}
+          What Sentinel checked ({out.lookups.length} read-only lookups)
+          {out.ai_cost_usd != null &&
+            (out.replayed
+              ? " · no AI cost (replayed)"
+              : ` · AI cost USD ${out.ai_cost_usd.toFixed(4)}`)}
         </summary>
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
           {out.lookups.map((l) => (
             <li key={String(l["ref"])}>
-              <span className={out.evidence.includes(String(l["ref"])) ? "font-medium text-foreground" : ""}>
-                {String(l["ref"])}
+              <span
+                className={
+                  out.evidence.includes(String(l["ref"])) ? "font-medium text-foreground" : ""
+                }
+              >
+                {lookupLabel(String(l["ref"]))}
               </span>{" "}
-              · {String(l["rows"])} rows · {String(l["duration_ms"])} ms
+              · {String(l["rows"])} {Number(l["rows"]) === 1 ? "record" : "records"}
+              {out.evidence.includes(String(l["ref"])) && " · cited"}
             </li>
           ))}
         </ol>
         {out.rejected_reason && byModel === false && (
-          <p className="mt-2 text-xs text-muted-foreground">Why the standard explanation: {out.rejected_reason}</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Why the standard explanation: {friendlyReason(out.rejected_reason)}
+          </p>
         )}
       </details>
     </div>
   );
+}
+
+function friendlyReason(reason: string): string {
+  if (reason.startsWith("AI_ENABLED=false")) return "AI investigation is turned off.";
+  if (reason.includes("No ANTHROPIC_API_KEY"))
+    return "AI isn't configured and there's no recorded answer for this case.";
+  if (reason.toLowerCase().includes("budget") || reason.includes("cost cap"))
+    return "The AI spending limit was reached.";
+  if (reason.startsWith("Model output rejected"))
+    return "The AI's answer included something not supported by the evidence, so it wasn't shown.";
+  if (reason.includes("unreachable") || reason.includes("HTTP"))
+    return "The AI service couldn't be reached.";
+  return reason;
 }

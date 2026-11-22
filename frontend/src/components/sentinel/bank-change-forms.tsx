@@ -1,5 +1,6 @@
 import type { AuthorizeRouteRequest, BankChangeOut, VerificationRequest } from "@/lib/api/schema";
 import { Choice, Field, value, WorkflowForm } from "./workflow-form";
+import { plain } from "@/lib/plain-language";
 
 export function BankVerificationForm({
   bank,
@@ -34,7 +35,7 @@ export function BankVerificationForm({
         name="contact"
         options={bank.trusted_contacts.map((contact) => ({
           value: contact.id,
-          label: `${contact.value} · ${contact.source} · On file since ${contact.established_at}`,
+          label: `${contact.value} · ${plain(contact.source)} · On file since ${contact.established_at}`,
         }))}
       />
       <Field label="Callback time (local time)" name="occurred" type="datetime-local" />

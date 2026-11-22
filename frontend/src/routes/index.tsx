@@ -36,6 +36,7 @@ import { ROLES } from "@/lib/domain/roles";
 import { STATUS_FILTERS, STATUS_FILTER_LABELS } from "@/lib/domain/status-groups";
 import type { InvoiceStatusFilter } from "@/lib/domain/types";
 import { formatDate, TODAY } from "@/lib/format";
+import { plain } from "@/lib/plain-language";
 import { useSession } from "@/lib/session";
 
 export const Route = createFileRoute("/")({
@@ -253,9 +254,10 @@ function OverviewContent() {
           <ul className="divide-y">
             {data.workItems.map((item) => (
               <li key={item.id} className="px-5 py-3 text-sm">
-                <p className="font-medium">{item.subject ?? item.item_type.replaceAll("_", " ")}</p>
+                <p className="font-medium">{item.subject ?? plain(item.item_type)}</p>
                 <p className="text-muted-foreground">
-                  {item.email_id} · {item.status} · {item.note}
+                  {plain(item.item_type)} · {plain(item.status)}
+                  {item.note ? ` · ${item.note}` : ""}
                 </p>
               </li>
             ))}

@@ -4,17 +4,12 @@ import { useState } from "react";
 import { PageHeader } from "@/components/sentinel/page-header";
 import { QueryState } from "@/components/sentinel/query-state";
 import { Evidence } from "@/components/sentinel/flight-recorder";
-import {
-  downloadFile,
-  Field,
-  humanize,
-  value,
-  WorkflowForm,
-} from "@/components/sentinel/workflow-form";
+import { downloadFile, Field, value, WorkflowForm } from "@/components/sentinel/workflow-form";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api/client";
 import { meQuery } from "@/lib/api/queries";
 import { formatDate } from "@/lib/format";
+import { actionLabel, describeData, isNotableResult, plain } from "@/lib/plain-language";
 import { useSession } from "@/lib/session";
 
 const PAGE_SIZE = 40;
@@ -61,7 +56,7 @@ function Audit() {
 }
 
 function AuditEvents() {
-  const { user, permissions } = useSession();
+  const { user, users, permissions } = useSession();
   const [filters, setFilters] = useState("");
   const [offset, setOffset] = useState(0);
   const [chain, setChain] = useState<Awaited<ReturnType<typeof api.verifyAudit>>>();
@@ -136,11 +131,14 @@ function AuditEvents() {
               {events.data.items.map((event) => (
                 <li key={event.id} className="px-5 py-3 text-sm">
                   <p className="font-medium">
-                    {humanize(event.action.replaceAll(".", " · "))} · {humanize(event.result)}
+                    {actionLabel(event.action)}
+                    {isNotableResult(event.result) && ` · ${plain(event.result)}`}
                   </p>
                   <p className="text-muted-foreground">
                     {formatDate(event.occurred_at, { dateStyle: "medium", timeStyle: "short" })} ·{" "}
-                    {event.actor_id ?? event.actor_kind}
+                    {event.actor_id
+                      ? (users.find((u) => u.id === event.actor_id)?.name ?? event.actor_id)
+                      : "Sentinel (system)"}
                     {event.invoice_id && (
                       <>
                         {" "}
@@ -167,7 +165,14 @@ function AuditEvents() {
                       </p>
                     )}
                     {event.policy_ids.length > 0 && <p>Policy {event.policy_ids.join(", ")}</p>}
-                    <Evidence items={[...event.evidence_refs, event.details]} />
+                    <Evidence items={event.evidence_refs} />
+                    <ul>
+                      {describeData(event.details ?? {}).map((line) => (
+                        <li key={line} className="break-all">
+                          {line}
+                        </li>
+                      ))}
+                    </ul>
                     <p className="break-all">Hash {event.hash}</p>
                   </details>
                 </li>

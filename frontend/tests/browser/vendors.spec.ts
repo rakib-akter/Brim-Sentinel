@@ -17,7 +17,7 @@ test("vendor search and onboarding lead to masked bank changes", async ({ page }
   await page.getByLabel("Contact email (optional)").fill("accounts@example.test");
   await page.getByRole("button", { name: "Submit onboarding request" }).click();
   await expect(page.getByRole("heading", { name: "Browser Test Supply Co" })).toBeVisible();
-  await expect(page.getByText(/pending review/)).toBeVisible();
+  await expect(page.getByText(/pending review/i)).toBeVisible();
   await expect(page.getByRole("button", { name: "Activate vendor" })).toHaveCount(0);
 
   await page.getByText("Request a bank change", { exact: true }).click();
@@ -39,7 +39,7 @@ test("vendor search and onboarding lead to masked bank changes", async ({ page }
     .getByLabel("Identity checks performed")
     .fill("Reviewed the synthetic supplier identity.");
   await page.getByRole("button", { name: "Activate vendor" }).click();
-  await expect(page.getByText(/VN-\d+ · active/)).toBeVisible();
+  await expect(page.getByText(/VN-\d+ · active/i)).toBeVisible();
 });
 
 test("directory shows loading, empty, retryable failure and permission denial", async ({

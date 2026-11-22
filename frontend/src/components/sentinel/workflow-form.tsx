@@ -3,6 +3,7 @@ import { useId, useRef, useSyncExternalStore, type ComponentProps, type ReactNod
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api/http-api";
+import { plain } from "@/lib/plain-language";
 import { useSession } from "@/lib/session";
 
 export function errorMessage(error: Error) {
@@ -157,4 +158,5 @@ export function Choice({
 }
 
 export const value = (fields: FormData, name: string) => String(fields.get(name) ?? "").trim();
-export const humanize = (key: string) => key.toLowerCase().replaceAll("_", " ");
+/** Plain-language label for a backend code (see lib/plain-language). */
+export const humanize = (key: string) => plain(key);
