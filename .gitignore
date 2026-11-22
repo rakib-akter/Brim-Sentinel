@@ -1,1 +1,61 @@
+# Operating system and editors
 .DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Credentials and local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.secret
+.secrets/
+credentials.json
+service-account*.json
+
+# Python environments, caches, and coverage
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage/
+htmlcov/
+
+# Local databases, uploads, and runtime state
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+uploads/
+.ai_usage.json
+
+# JavaScript dependencies and generated outputs
+node_modules/
+dist/
+dist-ssr/
+.output/
+.vinxi/
+.tanstack/
+.nitro/
+.wrangler/
+.dev.vars
+*.local
+
+# Logs, reports, and test artifacts
+*.log
+logs/
+playwright-report/
+test-results/
+gitleaks-report.json
+gitleaks-report.*
+.secretlint*
