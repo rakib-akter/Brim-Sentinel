@@ -661,3 +661,33 @@ class AwayRequest(Strict):
 class DelegationOut(BaseModel):
     user: UserOut
     rerouted_invoice_ids: list[str]
+# ------------------------------------------------------------------ analytics
+class AnalyticsRow(BaseModel):
+    key: str
+    label: str
+    cad_minor: int
+    count: int
+
+
+class AnalyticsKpis(BaseModel):
+    spend_cad_minor: int
+    paid_invoices: int
+    in_workflow: int
+    on_hold: int
+    waiting_for_approval: int
+
+
+class AnalyticsOut(BaseModel):
+    scope: Literal["all", "department", "own"]
+    scope_label: str
+    kpis: AnalyticsKpis
+    spend_by_month: list[AnalyticsRow]
+    spend_by_department: list[AnalyticsRow]
+    spend_by_vendor: list[AnalyticsRow]
+    spend_by_category: list[AnalyticsRow]
+    processing_status: list[AnalyticsRow]
+    hold_reasons: list[AnalyticsRow]
+    approval_workload: list[AnalyticsRow]
+    payment_status: list[AnalyticsRow]
+    payment_methods: list[AnalyticsRow]
+    notes: list[str]

@@ -145,6 +145,7 @@ export function createHttpApi(baseUrl: string) {
       write<Schema.DelegationOut>(actor, `/users/${encodeURIComponent(userId)}/away`, body),
     endAway: (actor: string, userId: string) =>
       write<Schema.DelegationOut>(actor, `/users/${encodeURIComponent(userId)}/back`, {}),
+    analytics: (actor: string) => get<Schema.AnalyticsOut>(actor, "/analytics"),
     audit: (actor: string, params: URLSearchParams) =>
       get<Schema.AuditListOut>(actor, `/audit/events?${params}`),
     exportAudit: async (actor: string, params: URLSearchParams) =>

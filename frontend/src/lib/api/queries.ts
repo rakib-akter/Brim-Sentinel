@@ -75,6 +75,8 @@ export const flightQuery = (actor: string, id: string) =>
 
 export const policyQuery = (actor: string) =>
   queryOptions({ queryKey: ["policy", actor], queryFn: () => api.policy(actor) });
+export const analyticsQuery = (actor: string) =>
+  queryOptions({ queryKey: ["analytics", actor], queryFn: () => api.analytics(actor) });
 
 export const vendorsQuery = (actor: string, q: string, status: string) =>
   queryOptions({

@@ -658,3 +658,32 @@ export interface DelegationOut {
   user: UserOut;
   rerouted_invoice_ids: Array<string>;
 }
+
+export interface AnalyticsRow {
+  key: string;
+  label: string;
+  cad_minor: number;
+  count: number;
+}
+
+export interface AnalyticsOut {
+  scope: "all" | "department" | "own";
+  scope_label: string;
+  kpis: {
+    spend_cad_minor: number;
+    paid_invoices: number;
+    in_workflow: number;
+    on_hold: number;
+    waiting_for_approval: number;
+  };
+  spend_by_month: Array<AnalyticsRow>;
+  spend_by_department: Array<AnalyticsRow>;
+  spend_by_vendor: Array<AnalyticsRow>;
+  spend_by_category: Array<AnalyticsRow>;
+  processing_status: Array<AnalyticsRow>;
+  hold_reasons: Array<AnalyticsRow>;
+  approval_workload: Array<AnalyticsRow>;
+  payment_status: Array<AnalyticsRow>;
+  payment_methods: Array<AnalyticsRow>;
+  notes: Array<string>;
+}

@@ -477,6 +477,108 @@
         }
       }
     },
+    "/api/v1/analytics": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Analytics Summary",
+        "description": "Spend by month, department, supplier and category; processing status, hold reasons, approval\nworkload and payments. Aggregates of stored records only, scoped like invoice visibility.",
+        "operationId": "analytics_summary_api_v1_analytics_get",
+        "parameters": [
+          {
+            "name": "x-demo-user-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Demo identity \u2014 not authentication.",
+              "title": "X-Demo-User-Id"
+            },
+            "description": "Demo identity \u2014 not authentication."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticsOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        }
+      }
+    },
     "/api/v1/invoices": {
       "get": {
         "tags": [
@@ -5950,6 +6052,174 @@
           "notes"
         ],
         "title": "ActivateRequest"
+      },
+      "AnalyticsKpis": {
+        "properties": {
+          "spend_cad_minor": {
+            "type": "integer",
+            "title": "Spend Cad Minor"
+          },
+          "paid_invoices": {
+            "type": "integer",
+            "title": "Paid Invoices"
+          },
+          "in_workflow": {
+            "type": "integer",
+            "title": "In Workflow"
+          },
+          "on_hold": {
+            "type": "integer",
+            "title": "On Hold"
+          },
+          "waiting_for_approval": {
+            "type": "integer",
+            "title": "Waiting For Approval"
+          }
+        },
+        "type": "object",
+        "required": [
+          "spend_cad_minor",
+          "paid_invoices",
+          "in_workflow",
+          "on_hold",
+          "waiting_for_approval"
+        ],
+        "title": "AnalyticsKpis"
+      },
+      "AnalyticsOut": {
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "all",
+              "department",
+              "own"
+            ],
+            "title": "Scope"
+          },
+          "scope_label": {
+            "type": "string",
+            "title": "Scope Label"
+          },
+          "kpis": {
+            "$ref": "#/components/schemas/AnalyticsKpis"
+          },
+          "spend_by_month": {
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsRow"
+            },
+            "type": "array",
+            "title": "Spend By Month"
+          },
+          "spend_by_department": {
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsRow"
+            },
+            "type": "array",
+            "title": "Spend By Department"
+          },
+          "spend_by_vendor": {
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsRow"
+            },
+            "type": "array",
+            "title": "Spend By Vendor"
+          },
+          "spend_by_category": {
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsRow"
+            },
+            "type": "array",
+            "title": "Spend By Category"
+          },
+          "processing_status": {
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsRow"
+            },
+            "type": "array",
+            "title": "Processing Status"
+          },
+          "hold_reasons": {
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsRow"
+            },
+            "type": "array",
+            "title": "Hold Reasons"
+          },
+          "approval_workload": {
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsRow"
+            },
+            "type": "array",
+            "title": "Approval Workload"
+          },
+          "payment_status": {
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsRow"
+            },
+            "type": "array",
+            "title": "Payment Status"
+          },
+          "payment_methods": {
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsRow"
+            },
+            "type": "array",
+            "title": "Payment Methods"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope",
+          "scope_label",
+          "kpis",
+          "spend_by_month",
+          "spend_by_department",
+          "spend_by_vendor",
+          "spend_by_category",
+          "processing_status",
+          "hold_reasons",
+          "approval_workload",
+          "payment_status",
+          "payment_methods",
+          "notes"
+        ],
+        "title": "AnalyticsOut"
+      },
+      "AnalyticsRow": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "cad_minor": {
+            "type": "integer",
+            "title": "Cad Minor"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "cad_minor",
+          "count"
+        ],
+        "title": "AnalyticsRow"
       },
       "AnomalyOut": {
         "properties": {
