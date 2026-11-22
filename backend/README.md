@@ -1,7 +1,7 @@
 # Brim Sentinel — backend
 
-FastAPI + SQLAlchemy 2 + SQLite (WAL) modular monolith. **All payments are SIMULATED.** No paid
-AI API and no payment rail is ever contacted (`AI_ENABLED=false` by default; no provider client ships).
+FastAPI + SQLAlchemy 2 + SQLite (WAL) modular monolith. **All payments are SIMULATED.** No payment
+rail is ever contacted. The AI investigation agent is off by default (`AI_ENABLED=false`); see below.
 
 ## Run
 
@@ -71,6 +71,26 @@ Paper Trail (V024, invoice `IN-EM-024-1`) bills by EFT but accepts card:
 
 See `docs/` for `FINANCIAL_RULES.md`, `ACCEPTANCE_TESTS.md`, `IMPLEMENTATION_STATUS.md`, `API_CHANGELOG.md`,
 `MODELS_AND_EVALUATION.md`.
+
+## AI investigation agent (optional)
+
+On a resolution case, **Investigate** runs a bounded, read-only investigation. A deterministic pass
+always runs first, so a cited explanation exists even with AI off. With AI on, Claude then chooses
+further lookups from the same seven fixed read-only tools (no SQL, no write, no approve/verify/release
+tool), within the remaining 8-call budget, and submits `{summary, evidence, proposed_actions,
+open_questions, complete}`. The backend rejects the answer, and shows the deterministic one, if any
+number is not in a cited lookup result, a cited ref does not exist, or an action is not allowlisted.
+Every lookup and model call is in the audit log and the payment journey. Holds never change.
+
+```bash
+# Live, and record responses for an offline demo (costs a few cents; daily cap AI_DAILY_BUDGET_USD):
+AI_ENABLED=true ANTHROPIC_API_KEY=sk-... .venv/bin/python -m scripts.record_ai_demo
+# Demo/judging without network or key: replay the recordings
+AI_ENABLED=true .venv/bin/uvicorn app.main:app --port 8000
+```
+
+Recordings are keyed by the exact request, so replay needs the same seed and model; anything not
+recorded falls back to the deterministic explanation.
 
 ## Layout
 

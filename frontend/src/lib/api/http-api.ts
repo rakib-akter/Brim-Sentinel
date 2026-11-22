@@ -124,6 +124,8 @@ export function createHttpApi(baseUrl: string) {
       write<Schema.CaseDetail>(actor, casePath(id) + "/bank-verification", body),
     authorizeRoute: (actor: string, id: string, body: Schema.AuthorizeRouteRequest) =>
       write<Schema.CaseDetail>(actor, casePath(id) + "/route-authorization", body),
+    investigate: (actor: string, id: string) =>
+      write<Schema.InvestigationOut>(actor, casePath(id) + "/investigate", {}),
     requestAuthorization: (actor: string, id: string, body: Schema.AuthorizationRequestBody) =>
       write<Schema.CaseDetail>(actor, casePath(id) + "/authorization-request", body),
     payments: (actor: string, state: string) =>

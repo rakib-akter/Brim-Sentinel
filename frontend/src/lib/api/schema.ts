@@ -308,6 +308,8 @@ export interface InvestigationOut {
   lookups: Array<Record<string, unknown>>;
   case_state_unchanged: boolean;
   proposals_status: string;
+  model?: string | null;
+  ai_cost_usd?: number | null;
 }
 
 export interface InvoiceDetail {

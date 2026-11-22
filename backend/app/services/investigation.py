@@ -8,7 +8,9 @@
   so it appears in the Flight Recorder.
 * Output schema {summary, evidence, proposed_actions, open_questions, complete}; every number in
   the summary must appear in a cited lookup result (fact check) or the deterministic template is used.
-* AI off/unavailable → deterministic investigation; holds are never changed by this service."""
+* AI on: a deterministic pass runs first (guaranteed fallback), then the model may choose further
+  allowlisted lookups within the remaining budget (investigation_agent.run) and submit findings.
+* AI off/unavailable/rejected → deterministic investigation; holds are never changed by this service."""
 from __future__ import annotations
 
 import hashlib
@@ -34,21 +36,19 @@ from app.db.models import (
     Vendor,
     VendorBankChange,
 )
-from app.integrations import ai_gateway
+from app.core.config import get_settings
+from app.services import investigation_agent
+from app.services.investigation_agent import BudgetExhausted
 from app.services import audit, pipeline
 from app.services.vendors import mask
 
-MAX_CALLS = 8
+MAX_CALLS = 8  # PRD §5A; AI_MAX_CALLS_PER_CASE may lower it, never raise it
 ROW_CAP = 200
 LOOKUP_BUDGET_S = 3.0
 PROMPT_VERSION = "investigation_v1"
 ALLOWED_PROPOSALS = {"trusted_callback", "request_corrected_invoice", "inspect_card_receipt", "vendor_onboarding",
                      "escalate_to_controller", "confirm_coding"}
 _ID = re.compile(r"^[A-Za-z0-9\-]{1,40}$")
-
-
-class BudgetExhausted(Exception):
-    pass
 
 
 def _check_id(v: str) -> str:
@@ -149,6 +149,7 @@ class Runner:
         self.scope = {"invoice_id": case.invoice_id, "vendor_id": inv.vendor_id if inv else None}
         self.calls: list[dict[str, Any]] = []
         self.results: dict[str, list[dict]] = {}
+        self.model: str | None = None  # set when the model, not the deterministic pass, picks lookups
 
     def call(self, tool: str, **args: str) -> list[dict]:
         if tool not in TOOLS:
@@ -167,7 +168,9 @@ class Runner:
         audit.record(self.s, actor=self.actor, action="investigation.lookup", object_type="case",
                      object_id=self.case.id, invoice_id=self.case.invoice_id, result="INFO",
                      details={"tool": tool, "args": clean, "row_count": len(rows), "result_hash": h,
-                              "duration_ms": round(dur * 1000, 1), "model": None, "prompt_version": PROMPT_VERSION})
+                              "duration_ms": round(dur * 1000, 1), "model": self.model,
+                              "chosen_by": "model" if self.model else "deterministic",
+                              "prompt_version": investigation_agent.PROMPT_VERSION if self.model else PROMPT_VERSION})
         return rows
 
 
@@ -238,30 +241,41 @@ def investigate(s: Session, actor: User, case: ResolutionCase, *, max_calls: int
     to exercise the fact check without calling any provider."""
     if actor.kind == "human" and actor.role == "employee":
         raise Forbidden("ROLE_NOT_PERMITTED", "Employees cannot run investigations.")
+    max_calls = min(max_calls, MAX_CALLS, max(1, get_settings().ai_max_calls_per_case))
     r = Runner(s, actor, case, max_calls=max_calls)
     template = _deterministic(r)
     source, rejected = "deterministic_template", None
     candidate = model_output
+    model_calls: list[dict[str, Any]] = []
     if candidate is None:
-        try:
-            candidate = ai_gateway.complete(PROMPT_VERSION, {"case_id": case.id, "results": r.results})
-        except ai_gateway.AIUnavailable as e:
-            rejected = str(e)
+        brief = {"case_id": case.id, "case_type": case.case_type, "state": case.state,
+                 "invoice_id": case.invoice_id, "vendor_id": r.scope["vendor_id"]}
+        agent = investigation_agent.run(r, brief, ALLOWED_PROPOSALS)
+        candidate, model_calls, rejected = agent["candidate"], agent["model_calls"], agent["error"]
+        for mc in model_calls:
+            audit.record(s, actor=actor, action="investigation.model_call", object_type="case", object_id=case.id,
+                         invoice_id=case.invoice_id, result="INFO",
+                         details={"model": mc["model"], "usage": mc["usage"], "cached": mc["cached"],
+                                  "cost_usd": mc["cost_usd"], "prompt_version": mc["prompt_version"]})
     if candidate is not None:
         keys = {"summary", "evidence", "proposed_actions", "open_questions", "complete"}
         unsupported = numbers_supported(str(candidate.get("summary", "")), r.results)
         bad_refs = [e for e in candidate.get("evidence", []) if e not in r.results]
         bad_actions = [a for a in candidate.get("proposed_actions", []) if a not in ALLOWED_PROPOSALS]
-        if set(candidate) != keys or unsupported or bad_refs or bad_actions:
+        if set(candidate) != keys or unsupported or bad_refs or bad_actions or not candidate.get("evidence"):
             rejected = (f"Model output rejected by validation: unsupported numbers {unsupported}, "
-                        f"unknown evidence {bad_refs}, disallowed actions {bad_actions}.")
+                        f"unknown evidence {bad_refs}, disallowed actions {bad_actions}"
+                        f"{', no evidence cited' if not candidate.get('evidence') else ''}.")
         else:
             template, source = candidate, "model"
     out = {**template, "source": source, "rejected_reason": rejected, "lookups": r.calls,
            "case_state_unchanged": True,
-           "proposals_status": "PROPOSED — a person must accept; nothing was executed."}
+           "proposals_status": "PROPOSED — a person must accept; nothing was executed.",
+           "model": r.model if source == "model" else None,
+           "ai_cost_usd": round(sum(float(m.get("cost_usd") or 0) for m in model_calls), 6) if model_calls else None}
     audit.record(s, actor=actor, action="investigation.completed", object_type="case", object_id=case.id,
                  invoice_id=case.invoice_id, result="INFO",
                  details={"source": source, "complete": out["complete"], "lookups": len(r.calls),
+                          "model_calls": len(model_calls), "ai_cost_usd": out["ai_cost_usd"],
                           "rejected_reason": rejected, "proposed_actions": out["proposed_actions"]})
     return out

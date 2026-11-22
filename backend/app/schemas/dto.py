@@ -449,6 +449,8 @@ class InvestigationOut(BaseModel):
     lookups: list[dict[str, Any]]
     case_state_unchanged: bool
     proposals_status: str
+    model: str | None = None
+    ai_cost_usd: float | None = None
 
 
 # ------------------------------------------------------------------ requests

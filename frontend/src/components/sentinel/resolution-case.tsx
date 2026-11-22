@@ -6,6 +6,7 @@ import type { CaseDetail } from "@/lib/api/schema";
 import { useSession } from "@/lib/session";
 import { BankAuthorizationForm, BankVerificationForm } from "./bank-change-forms";
 import { Evidence } from "./flight-recorder";
+import { InvestigatePanel } from "./investigate-panel";
 import { Choice, errorMessage, Field, humanize, value, WorkflowForm } from "./workflow-form";
 
 export function ResolutionCase({ id }: { id: string }) {
@@ -38,6 +39,7 @@ export function ResolutionCase({ id }: { id: string }) {
           </Link>
         </p>
       </div>
+      <InvestigatePanel caseId={data.id} />
       {data.wizard && <BankWizard data={data} />}
       {data.wizard?.current_step === "done" &&
         data.actions.some(
