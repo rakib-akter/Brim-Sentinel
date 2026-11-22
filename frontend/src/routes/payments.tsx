@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { Wallet, ShieldAlert, CheckCircle2 } from "lucide-react";
 import { InvoiceTable } from "@/components/sentinel/invoice-table";
 import { PageHeader } from "@/components/sentinel/page-header";
 import { PaymentRecord } from "@/components/sentinel/payment-workflow";
@@ -35,8 +36,9 @@ function Payments() {
         title="Payments"
         description="Track holds, scheduling, release and settlement for simulated payments."
       />
+      <div className="grid gap-3 sm:grid-cols-3"><PaymentStat icon={Wallet} label="Payment records" value={payments.data?.length ?? 0} note={state ? "Matching selected state" : "Visible payment history"} /><PaymentStat icon={CheckCircle2} label="Ready to schedule" value={pending.filter(({ invoice }) => invoice.status === "approved").length} note="Approved invoices" /><PaymentStat icon={ShieldAlert} label="On hold" value={pending.filter(({ invoice }) => invoice.status === "on_hold").length} note="Payment safeguards active" /></div>
       <section className="surface overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/80 px-6 py-5">
           <h2 className="font-semibold">Simulated payment records</h2>
           <label className="flex items-center gap-2 text-sm">
             State
@@ -68,7 +70,7 @@ function Payments() {
           {payments.data?.map((payment) => (
             <li
               key={payment.id}
-              className="flex flex-wrap items-center justify-between gap-4 px-5 py-4"
+              className="flex flex-wrap items-center justify-between gap-4 px-6 py-5 transition-colors hover:bg-secondary/30"
             >
               <PaymentRecord payment={payment} />
               <Link
@@ -94,10 +96,12 @@ function Payments() {
       )}
       {pending.length > 0 && (
         <section className="surface overflow-hidden">
-          <h2 className="border-b px-5 py-3 font-semibold">Held and ready to schedule</h2>
+          <h2 className="border-b border-border/80 px-6 py-5 text-[15px] font-semibold tracking-tight">Held and ready to schedule</h2>
           <InvoiceTable tasks={pending} caption="Invoices held or ready to schedule" />
         </section>
       )}
     </div>
   );
 }
+
+function PaymentStat({ icon: Icon, label, value, note }: { icon: typeof Wallet; label: string; value: number; note: string }) { return <div className="surface flex items-start gap-3 p-5"><div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary"><Icon className="size-5" /></div><div><p className="text-xs text-muted-foreground">{label}</p><p className="figure mt-1 text-[27px] font-semibold tracking-tight">{value}</p><p className="text-[11px] text-muted-foreground">{note}</p></div></div>; }
