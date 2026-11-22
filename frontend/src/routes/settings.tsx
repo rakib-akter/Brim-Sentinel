@@ -1,7 +1,10 @@
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Check, FlaskConical, Server } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ApprovalRulesSection, AwaySection } from "@/components/sentinel/admin-settings";
 import { PageHeader } from "@/components/sentinel/page-header";
+import { identitiesQuery } from "@/lib/api/queries";
 import { ROLES } from "@/lib/domain/roles";
 import { useSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -10,7 +13,10 @@ export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
       { title: "Settings — Brim Sentinel" },
-      { name: "description", content: "Demo identity, roles and what each role may do." },
+      {
+        name: "description",
+        content: "Demo identity, approval rules, delegation and what each role may do.",
+      },
       { property: "og:title", content: "Settings — Brim Sentinel" },
       { property: "og:description", content: "Demo identity, roles and data source." },
       { property: "og:type", content: "website" },
@@ -22,13 +28,23 @@ export const Route = createFileRoute("/settings")({
 
 function SettingsPage() {
   const { user, users, setUserId, identityError } = useSession();
+  const identities = useQuery(identitiesQuery());
+  const awayById = new Map(
+    (identities.data?.users ?? [])
+      .filter((u) => u.status === "on_leave")
+      .map((u) => [u.id, u.delegate_user_id] as const),
+  );
+  const nameOf = (id: string | null | undefined) => users.find((u) => u.id === id)?.name ?? id;
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Workspace"
         title="Settings"
-        description="Choose who you're acting as in the demo and see what each role can do."
+        description="Choose who you're acting as, see the approval rules, and set who covers for an approver who's away."
       />
+
+      <AwaySection />
+      <ApprovalRulesSection />
 
       <section className="surface overflow-hidden" aria-labelledby="identity-heading">
         <header className="flex items-start gap-3 border-b bg-warning-soft px-5 py-4">
@@ -78,6 +94,11 @@ function SettingsPage() {
                       {role.cannot}
                     </p>
                   </div>
+                  {awayById.has(u.id) && (
+                    <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-medium text-warning-foreground">
+                      Away · {nameOf(awayById.get(u.id)) ?? "no delegate"} covers
+                    </span>
+                  )}
                   <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                     {role.label}
                   </span>

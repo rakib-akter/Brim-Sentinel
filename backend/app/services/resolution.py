@@ -22,6 +22,7 @@ from app.db.models import (
     VendorBankChange,
 )
 from app.services import audit, catalog
+from app.services import policy_settings
 
 CLOSED_STATES = {"RESOLVED", "REJECTED", "CANCELLED"}
 INITIAL_STATE = {
@@ -294,7 +295,8 @@ def request_authorization(session: Session, actor: User, case: ResolutionCase, *
     excluded = pipeline.release_exclusions(session, inv, v)
     data = {"approvers": [{"step": s.step_key, "assigned_actor_id": s.assigned_actor_id, "status": st,
                            "policy_ids": s.policy_ids} for s, st, _ in steps],
-            "eligible_releasers": approval_policy.eligible_releasers(v.amount_cad_minor or 0, users, excluded),
+            "eligible_releasers": approval_policy.eligible_releasers(v.amount_cad_minor or 0, users, excluded,
+                                                                    policy_settings.current(session)),
             "invoice_version": v.version,
             "note": "Request only — this does not approve or release. Each approver and the independent releaser "
                     "must act themselves."}

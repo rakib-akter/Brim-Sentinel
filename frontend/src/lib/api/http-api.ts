@@ -138,6 +138,13 @@ export function createHttpApi(baseUrl: string) {
       }),
     settle: (actor: string, id: string, body: Schema.SettleRequest) =>
       write<Schema.PaymentOut>(actor, paymentPath(id) + "/simulate-settlement", body),
+    policy: (actor: string) => get<Schema.ApprovalPolicyOut>(actor, "/settings/approval-policy"),
+    updatePolicy: (actor: string, body: Schema.ApprovalPolicyUpdate) =>
+      write<Schema.ApprovalPolicyOut>(actor, "/settings/approval-policy", body, "PATCH"),
+    startAway: (actor: string, userId: string, body: Schema.AwayRequest) =>
+      write<Schema.DelegationOut>(actor, `/users/${encodeURIComponent(userId)}/away`, body),
+    endAway: (actor: string, userId: string) =>
+      write<Schema.DelegationOut>(actor, `/users/${encodeURIComponent(userId)}/back`, {}),
     audit: (actor: string, params: URLSearchParams) =>
       get<Schema.AuditListOut>(actor, `/audit/events?${params}`),
     exportAudit: async (actor: string, params: URLSearchParams) =>

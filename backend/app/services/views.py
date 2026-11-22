@@ -34,6 +34,7 @@ from app.schemas import dto
 from app.services import approval_policy, bank, card_routes, catalog, lifecycle as lc, pipeline, resolution
 from app.services.validation import OPEN_BANK_CHANGE_STATES
 from app.services.vendors import mask, similar_identities
+from app.services import policy_settings
 
 STATE_LABEL = {
     "RECEIVED": "Received — processing", "DRAFT": "Processing", "EXTRACTED": "Processing", "CODED": "Processing",
@@ -111,7 +112,8 @@ def actions_for(ctx: Ctx, inv: Invoice, v: InvoiceVersion, blocking: list, steps
     if st == lc.SCHEDULED and has(a, "payment.release"):
         p = _live_payment(s, inv)
         approvers = {d.actor_id for _s, _st, d in steps if d is not None}
-        if p and a.role in approval_policy.release_authority_roles(p.amount_cad_minor) and a.id not in approvers \
+        roles = approval_policy.release_authority_roles(p.amount_cad_minor, policy_settings.current(s)) if p else []
+        if p and a.role in roles and a.id not in approvers \
                 and a.id != p.prepared_by and a.id != v.requester_id:
             out.append("release_payment")
     if st == lc.RELEASED and has(a, "payment.settle_simulation"):
@@ -246,7 +248,7 @@ def detail(ctx: Ctx, inv: Invoice) -> dto.InvoiceDetail:
     p = _live_payment(s, inv)
     if p and p.prepared_by:
         excluded.add(p.prepared_by)
-    rel = approval_policy.eligible_releasers(v.amount_cad_minor, ctx.users, excluded) \
+    rel = approval_policy.eligible_releasers(v.amount_cad_minor, ctx.users, excluded, policy_settings.current(s)) \
         if v.amount_cad_minor is not None and inv.kind == "invoice" else []
     dups = [dto.DuplicateOut(id=d.id, match_type=d.match_type, confirmed=d.confirmed, score=d.score,
                              matched_invoice_id=d.matched_invoice_id, matched_card_txn_id=d.matched_card_txn_id,

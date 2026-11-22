@@ -34,6 +34,7 @@ from app.services import anomaly, approval_policy, audit, catalog, coding, dupli
 from app.services import resolution, validation
 from app.services import vendors as vendor_svc
 from app.services.validation import Result
+from app.services import policy_settings
 
 
 def users_map(session: Session) -> dict[str, User]:
@@ -232,11 +233,12 @@ def _route(session: Session, inv: Invoice, v: InvoiceVersion, vendor, po_over: b
     if inv.kind != "invoice" or v.amount_cad_minor is None or v.department_id is None:
         return results
     users = users_map(session)
+    cfg = policy_settings.current(session)
     dept = session.get(Department, v.department_id)
     chain = approval_policy.build_chain(
         v.amount_cad_minor, dept_manager_id=dept.manager_user_id if dept else None, requester_id=v.requester_id,
         vendor_status=vendor.status if vendor else None, vendor_category=vendor.category if vendor else None,
-        po_over_balance=po_over, users=users, maker_id=v.created_by if v.provenance == "manual" else None)
+        po_over_balance=po_over, users=users, maker_id=v.created_by if v.provenance == "manual" else None, cfg=cfg)
     for i, s in enumerate(chain.steps):
         session.add(ApprovalStep(id=f"AS-{inv.id}-v{v.version}-{s.step_key}", invoice_id=inv.id, version=v.version,
                                  step_index=i, step_key=s.step_key, required_role=s.required_role,
@@ -253,13 +255,13 @@ def _route(session: Session, inv: Invoice, v: InvoiceVersion, vendor, po_over: b
             excluded.add(v.requester_id)
         if v.provenance == "manual" and v.created_by:
             excluded.add(v.created_by)  # maker-checker: the version author cannot release it either
-        rel = approval_policy.eligible_releasers(v.amount_cad_minor, users, excluded)
-        pol = ["P09", "P11"] if v.amount_cad_minor <= 100_000_00 else ["P10", "P11"]
+        rel = approval_policy.eligible_releasers(v.amount_cad_minor, users, excluded, cfg)
+        pol = approval_policy.release_policy_ids(v.amount_cad_minor, cfg)
         if not rel:
             results.append(Result(
                 "release_routing", "NO_ELIGIBLE_RELEASER", "FAIL", True,
                 f"Approval chain {[s.assigned_actor_id for s in chain.steps]} includes every user with release "
-                f"authority for this amount ({approval_policy.release_authority_roles(v.amount_cad_minor)}); "
+                f"authority for this amount ({approval_policy.release_authority_roles(v.amount_cad_minor, cfg)}); "
                 f"P11 forbids an approver from releasing. Escalated for a documented decision — no override exists.",
                 "critical", policy_ids=pol))
         else:

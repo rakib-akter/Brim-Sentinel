@@ -103,3 +103,60 @@ def test_terminated_approver_never_assigned(users):
 
 def test_amount_above_all_limits_has_no_approver(users):
     assert any(b["code"] == "NO_ELIGIBLE_APPROVER" for b in chain(users, "500000.01").blocking_codes)
+
+
+# ------------------------------------------------------------------ editable policy (brief: admin edits rules)
+from app.services.approval_policy import (  # noqa: E402
+    DEFAULT_POLICY,
+    PolicyConfig,
+    release_policy_ids,
+    validate_policy,
+)
+
+
+def test_default_policy_is_the_dataset_policy():
+    assert DEFAULT_POLICY == PolicyConfig(10_000_00, 50_000_00, 250_000_00, 100_000_00, True, True)
+    assert validate_policy(DEFAULT_POLICY) == []
+
+
+def test_stricter_threshold_adds_the_finance_manager_earlier(users):
+    strict = PolicyConfig(dept_manager_up_to_minor=5_000_00)
+    r = build_chain(to_minor("7000"), dept_manager_id="U007", requester_id="U013", vendor_status="active",
+                    vendor_category=None, po_over_balance=False, users=users, cfg=strict)
+    assert steps(r) == [("dept_manager", "U007"), ("finance_manager", "U003")]
+    assert r.steps[1].policy_ids == ["P02"]
+    assert steps(chain(users, 7000)) == [("dept_manager", "U007")]  # default unchanged
+
+
+def test_stricter_controller_and_cfo_thresholds(users):
+    strict = PolicyConfig(controller_over_minor=20_000_00, cfo_over_minor=100_000_00)
+    r = build_chain(to_minor("150000"), dept_manager_id="U007", requester_id="U013", vendor_status="active",
+                    vendor_category=None, po_over_balance=False, users=users, cfg=strict)
+    assert [s.step_key for s in r.steps] == ["dept_manager", "finance_manager", "controller_admin", "cfo"]
+
+
+def test_policy_can_be_tightened_but_never_loosened_past_authority_limits():
+    assert validate_policy(PolicyConfig(dept_manager_up_to_minor=20_000_00))  # dept managers' limit is 10k
+    assert validate_policy(PolicyConfig(controller_over_minor=60_000_00))     # finance manager's limit is 50k
+    assert validate_policy(PolicyConfig(cfo_over_minor=300_000_00))           # controller's limit is 250k
+    assert validate_policy(PolicyConfig(fm_release_up_to_minor=150_000_00))   # brief: FM releases ≤ 100k
+    assert validate_policy(PolicyConfig(dept_manager_up_to_minor=50_00))      # below the CAD 100 floor
+    assert validate_policy(PolicyConfig(dept_manager_up_to_minor=9_000_00, controller_over_minor=5_000_00))
+    assert validate_policy(PolicyConfig(5_000_00, 20_000_00, 100_000_00, 50_000_00, False, False)) == []
+
+
+def test_p05_p06_switches(users):
+    off = PolicyConfig(new_vendor_needs_fm=False, legal_vendor_needs_fm=False)
+    for status, category in (("pending_review", None), ("active", "Legal")):
+        r = build_chain(to_minor("5000"), dept_manager_id="U007", requester_id="U013", vendor_status=status,
+                        vendor_category=category, po_over_balance=False, users=users, cfg=off)
+        assert steps(r) == [("dept_manager", "U007")]
+    assert [s.step_key for s in chain(users, 5000, status="pending_review").steps] == ["dept_manager",
+                                                                                        "finance_manager"]
+
+
+def test_release_cap_is_configurable_and_only_lowers():
+    cap = PolicyConfig(fm_release_up_to_minor=50_000_00)
+    assert release_authority_roles(to_minor("60000"), cap) == ["controller_admin"]
+    assert release_policy_ids(to_minor("60000"), cap) == ["P10", "P11"]
+    assert release_authority_roles(to_minor("60000")) == ["finance_manager", "controller_admin"]

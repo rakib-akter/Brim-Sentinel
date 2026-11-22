@@ -611,3 +611,50 @@ export interface WorkItemOut {
   from_name: string | null;
   payable: boolean;
 }
+
+export interface ApprovalPolicyValues {
+  dept_manager_up_to_minor: number;
+  controller_over_minor: number;
+  cfo_over_minor: number;
+  fm_release_up_to_minor: number;
+  new_vendor_needs_fm: boolean;
+  legal_vendor_needs_fm: boolean;
+}
+
+export interface ApprovalPolicyRule {
+  id: string;
+  text: string;
+  editable: "threshold" | "switch" | "locked" | "delegation";
+}
+
+export interface ApprovalPolicyOut {
+  version: number;
+  values: ApprovalPolicyValues;
+  defaults: ApprovalPolicyValues;
+  maximums: Record<string, number>;
+  minimum_minor: number;
+  rules: Array<ApprovalPolicyRule>;
+  updated_by: string | null;
+  updated_by_name?: string | null;
+  updated_at: string | null;
+  reason: string | null;
+  can_edit: boolean;
+  rerouted_invoice_ids?: Array<string>;
+  changed?: Record<string, Record<string, unknown>>;
+}
+
+export interface ApprovalPolicyUpdate {
+  expected_version: number;
+  values: ApprovalPolicyValues;
+  reason: string;
+}
+
+export interface AwayRequest {
+  delegate_user_id: string;
+  note?: string | null;
+}
+
+export interface DelegationOut {
+  user: UserOut;
+  rerouted_invoice_ids: Array<string>;
+}

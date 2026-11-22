@@ -126,9 +126,11 @@ def create_app() -> FastAPI:
                       {"errors": [{"loc": list(e.get("loc", [])), "msg": e.get("msg"), "type": e.get("type")}
                                   for e in exc.errors()]}, cid)
 
-    from app.api import cases, invoices, meta, payments, vendors, audit_routes
+    from app.api import audit_routes, cases, invoices, meta, payments, vendors
+    from app.api import settings as settings_routes
 
-    for r in (meta.router, invoices.router, payments.router, cases.router, vendors.router, audit_routes.router):
+    for r in (meta.router, invoices.router, payments.router, cases.router, vendors.router, audit_routes.router,
+              settings_routes.router):
         app.include_router(r)
 
     @app.on_event("startup")
