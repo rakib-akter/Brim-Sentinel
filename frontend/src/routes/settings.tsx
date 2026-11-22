@@ -67,7 +67,7 @@ function SettingsPage() {
               <li key={u.id}>
                 <button
                   type="button"
-                  onClick={() => setUserId(u.id)}
+                  onClick={() => void setUserId(u.id)}
                   aria-pressed={active}
                   className={cn(
                     "flex w-full items-start gap-4 px-5 py-3.5 text-left transition-colors hover:bg-secondary/60 focus-visible:outline-none focus-visible:bg-secondary",

@@ -32,7 +32,7 @@ const STEPS = [
   },
   {
     id: "approve",
-    stage: "Settle",
+    stage: "Settle · Approve",
     title: "Approve an invoice waiting for you",
     body: "Approvals follow the rules; nobody can approve their own invoice.",
     as: "U007",
@@ -41,7 +41,7 @@ const STEPS = [
   },
   {
     id: "release",
-    stage: "Settle",
+    stage: "Settle · Pay",
     title: "Release a simulated payment",
     body: "Someone who didn't approve it must release it. Try releasing as the approver to see it refused.",
     as: "U003",
@@ -109,7 +109,7 @@ export function GuidedDemo() {
     if (user.id === step.as || !users.some((u) => u.id === step.as)) {
       router.history.push(step.path);
     } else {
-      setUserId(step.as, step.path);
+      void setUserId(step.as, step.path);
     }
   };
   return (

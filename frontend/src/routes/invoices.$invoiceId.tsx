@@ -1,8 +1,15 @@
-import { Suspense } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  ArrowRight,
+  FileSearch,
+  Brain,
+  History,
+  MessagesSquare,
+  ScanSearch,
+  Wallet,
   CheckCircle2,
   ChevronDown,
   CircleDashed,
@@ -28,13 +35,20 @@ import { api } from "@/lib/api/client";
 import { ResolutionCase } from "@/components/sentinel/resolution-case";
 import { ApprovalDecision, InvoiceCorrections } from "@/components/sentinel/invoice-actions";
 import { Evidence, FlightRecorder } from "@/components/sentinel/flight-recorder";
-import {
-  CodingPanel,
-  DocumentPanel,
-  ProgressRail,
-  SentinelAnalysis,
-} from "@/components/sentinel/invoice-workspace";
+import { findingAnchor } from "@/components/sentinel/invoice-workspace";
+import { AnomalyPanel, CodingPanel } from "@/components/sentinel/ml-coding";
+import { DocumentPane, useDocumentLayout } from "@/components/sentinel/document-pane";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { anchorKeyForRefs, DocumentFocusContext, useDocumentFocus } from "@/lib/document-focus";
+
+const DecisionGraph = lazy(() =>
+  import("@/components/sentinel/decision-graph").then((m) => ({ default: m.DecisionGraph })),
+);
+const ConnectionsGraph = lazy(() =>
+  import("@/components/sentinel/connections-graph").then((m) => ({ default: m.ConnectionsGraph })),
+);
 import { PaymentWorkflow } from "@/components/sentinel/payment-workflow";
+import { SourceReview } from "@/components/sentinel/source-review";
 import { Field, humanize, value, WorkflowForm } from "@/components/sentinel/workflow-form";
 import type { InvoiceDetail as InvoiceView } from "@/lib/domain/types";
 import type { InvoiceDetail as InvoiceRecord } from "@/lib/api/schema";
@@ -85,10 +99,44 @@ function InvoicePage() {
   );
 }
 
+type View = "document" | "case" | "coding" | "pay" | "history";
+const VIEW_IDS: View[] = ["document", "case", "coding", "pay", "history"];
+type HistoryView = "timeline" | "graph" | "connections";
+
 function InvoiceContent() {
   const { invoiceId } = Route.useParams();
   const { user } = useSession();
   const { data } = useSuspenseQuery(invoiceQuery(user.id, invoiceId));
+  const [view, setViewState] = useState<View>("document");
+  const [historyView, setHistoryView] = useState<HistoryView>("timeline");
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+  // The open tab lives in the URL hash so it survives a demo-identity switch and can be linked.
+  useEffect(() => {
+    const h = window.location.hash.slice(1);
+    if ((VIEW_IDS as string[]).includes(h)) setViewState(h as View);
+    if (h === "graph" || h === "connections") {
+      setViewState("history");
+      setHistoryView(h);
+    }
+  }, []);
+  const setView = (v: View) => {
+    setViewState(v);
+    window.history.replaceState(null, "", `#${v}`);
+  };
+  const fileName = data?.invoice.fileName ?? null;
+  const layout = useDocumentLayout(invoiceId, data?.record.version ?? 0, !!data && !!fileName);
+  const focus = useMemo(
+    () => ({
+      focusKey,
+      setFocusKey: (key: string | null) => {
+        setFocusKey(key);
+        if (key) setView("document");
+      },
+      available: new Set((layout.data?.anchors ?? []).map((a) => a.key)),
+    }),
+
+    [focusKey, layout.data],
+  );
 
   if (!data) {
     return (
@@ -104,90 +152,172 @@ function InvoiceContent() {
 
   const record = data.record;
   const { action } = data;
-  const target =
-    action.kind === "approve"
-      ? "approval"
+  const target: View | null =
+    action.kind === "approve" ||
+    ["prepare_payment", "release_payment", "simulate_settlement"].includes(action.kind)
+      ? "pay"
       : ["review_bank_details", "resolve_issue"].includes(action.kind)
-        ? "resolution"
-        : ["prepare_payment", "release_payment", "simulate_settlement"].includes(action.kind)
-          ? "payment"
-          : null;
+        ? "case"
+        : null;
   const rawRefs = (id: string | undefined) =>
     record.validation_findings.find((f) => f.id === id)?.evidence_refs ?? [];
+  const covered = new Set(record.resolution_cases.flatMap((c) => c.finding_ids));
+  const loose = [...data.invoice.findings]
+    .filter((f) => !f.id || !covered.has(f.id))
+    .sort((a, b) => Number(b.blocking) - Number(a.blocking));
+  const openCases = record.resolution_cases.filter(
+    (c) => !["RESOLVED", "REJECTED", "CANCELLED"].includes(c.state),
+  );
+  const hasCase =
+    record.resolution_cases.length > 0 ||
+    loose.length > 0 ||
+    record.duplicate_candidates.length > 0;
+  const blocking = data.invoice.findings.some((f) => f.blocking);
+  const needsCoding = record.line_items.filter(
+    (l) => l.gl_account && !["CONFIRMED", "OVERRIDDEN"].includes(l.coding_status ?? ""),
+  ).length;
+  const counts = { PASS: 0, FAIL: 0, UNKNOWN: 0 } as Record<string, number>;
+  for (const f of record.validation_findings) counts[f.result] = (counts[f.result] ?? 0) + 1;
+
+  const tabs: Array<{ id: View; label: string; icon: typeof FileSearch; badge?: ReactNode }> = [
+    { id: "document", label: "Document", icon: FileSearch },
+    ...(hasCase
+      ? [
+          {
+            id: "case" as const,
+            label: "Case",
+            icon: MessagesSquare,
+            badge: (
+              <span
+                className={`size-2 rounded-full ${blocking ? "bg-critical" : "bg-warning"}`}
+                aria-label={blocking ? "Blocks payment" : "Needs a look"}
+              />
+            ),
+          },
+        ]
+      : []),
+    {
+      id: "coding",
+      label: "GL coding",
+      icon: Brain,
+      badge: needsCoding ? (
+        <span className="figure rounded-full bg-secondary px-1.5 text-[10px] text-muted-foreground">
+          {needsCoding}
+        </span>
+      ) : undefined,
+    },
+    { id: "pay", label: "Approval & payment", icon: Wallet },
+    { id: "history", label: "History", icon: History },
+  ];
+
   return (
-    <div className="space-y-4">
-      <ReviewHeader detail={data} />
-      <ProgressRail record={record} />
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
-        <div className="xl:sticky xl:top-4">
-          <DocumentPanel
-            invoiceId={invoiceId}
-            fileName={data.invoice.fileName}
-            scanned={data.invoice.scanned}
-          />
-        </div>
-        <div className="min-w-0 space-y-6">
-          {/* 1 · Detect */}
-          <SentinelAnalysis
-            record={record}
-            findings={data.invoice.findings}
-            plainStatus={data.plainStatus}
-            actionLabel={action.label}
-            actionTarget={target}
-          />
-          <ExtractedDetails detail={data} />
-          <CodingPanel key={record.version} record={record} />
-          <ChecksPanel detail={data} />
-
-          {/* 2 · Resolve */}
-          <section id="resolution" className="scroll-mt-4 space-y-3">
-            <StageHeading
-              n={2}
-              title="Resolve"
-              note="Issues Sentinel found and the safe way through them."
-            />
-            {data.invoice.findings.length === 0 && record.resolution_cases.length === 0 && (
-              <p className="surface px-5 py-4 text-sm text-muted-foreground">
-                Nothing to resolve. All blocking checks passed.
-              </p>
-            )}
-            {record.resolution_cases.map((item) => (
-              <ResolutionCase key={item.id} id={item.id} />
+    <DocumentFocusContext.Provider value={focus}>
+      <div className="space-y-4">
+        <ReviewHeader
+          detail={data}
+          actionTarget={target}
+          onAction={(v) => setView(v as View)}
+          stagesNav={null}
+        />
+        <Tabs value={view} onValueChange={(v) => setView(v as View)}>
+          <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-none border-b bg-transparent p-0">
+            {tabs.map((t) => (
+              <TabsTrigger
+                key={t.id}
+                value={t.id}
+                className="-mb-px gap-1.5 rounded-none border-b-2 border-transparent px-3 pb-2.5 pt-1.5 text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+              >
+                <t.icon className="size-4" aria-hidden /> {t.label}
+                {t.badge}
+              </TabsTrigger>
             ))}
-            {data.invoice.findings.map((f) => (
-              <div key={f.id ?? f.code} className="space-y-2">
-                <FindingCard finding={f} refs={rawRefs(f.id)} />
-                {f.id &&
-                  record.allowed_actions.includes("dismiss_finding") &&
-                  record.validation_findings.some(
-                    (finding) => finding.id === f.id && finding.dismissible,
-                  ) && (
-                    <details className="surface px-5 py-4 text-sm">
-                      <summary className="cursor-pointer">Document dismissal</summary>
-                      <WorkflowForm
-                        label="Dismiss finding"
-                        run={(fields) =>
-                          api.dismiss(user.id, invoiceId, f.id!, {
-                            expected_version: record.version,
-                            reason: value(fields, "reason"),
-                          })
-                        }
-                      >
-                        <Field name="reason" label="Evidence-backed reason" />
-                      </WorkflowForm>
-                    </details>
+          </TabsList>
+
+          {/* Document: what Sentinel read, linked to where it read it. */}
+          <TabsContent value="document" className="mt-5 space-y-4">
+            <SourceReview
+              invoiceId={invoiceId}
+              record={record}
+              fileName={fileName}
+              scanned={data.invoice.scanned}
+              focusKey={focusKey}
+            />
+            <details className="surface group px-5 py-3">
+              <summary className="flex cursor-pointer items-center justify-between gap-3 text-sm">
+                <span className="font-medium">
+                  Checks · {counts["PASS"] ?? 0} passed
+                  {(counts["FAIL"] ?? 0) > 0 && (
+                    <span className="text-critical-foreground"> · {counts["FAIL"]} failed</span>
                   )}
+                  {(counts["UNKNOWN"] ?? 0) > 0 && (
+                    <span className="text-warning-foreground">
+                      {" "}
+                      · {counts["UNKNOWN"]} couldn't be confirmed
+                    </span>
+                  )}
+                </span>
+                <ChevronDown
+                  className="size-4 transition-transform group-open:rotate-180"
+                  aria-hidden
+                />
+              </summary>
+              <div className="mt-3 space-y-4">
+                <ChecksPanel detail={data} />
+                <ExtractedDetails detail={data} />
               </div>
-            ))}
-          </section>
+            </details>
+            <InvoiceCorrections key={record.version} invoice={record} />
+          </TabsContent>
 
-          {/* 3 · Settle */}
-          <section id="settle" className="scroll-mt-4 space-y-3">
-            <StageHeading
-              n={3}
-              title="Settle"
-              note="Approvals by the right people, then an independent simulated release."
-            />
+          {/* Case: the conversation and the checklist to get this invoice paid. */}
+          {hasCase && (
+            <TabsContent value="case" className="mt-5 space-y-5">
+              <div id="resolution" className="scroll-mt-36 space-y-8">
+                {openCases.length === 0 && record.resolution_cases.length > 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Every case on this invoice is closed. The history is below.
+                  </p>
+                )}
+                {record.resolution_cases.map((item) => (
+                  <ResolutionCase key={item.id} id={item.id} />
+                ))}
+              </div>
+              {loose.length > 0 && (
+                <section className="space-y-2" aria-labelledby="also-heading">
+                  <h3 id="also-heading" className="text-sm font-semibold">
+                    {record.resolution_cases.length ? "Also noticed" : "Sentinel noticed"}
+                  </h3>
+                  {loose.map((f) => (
+                    <div key={f.id ?? f.code} className="space-y-2">
+                      <FindingCard finding={f} refs={rawRefs(f.id)} invoiceId={invoiceId} />
+                      <DismissFinding record={record} findingId={f.id} />
+                    </div>
+                  ))}
+                </section>
+              )}
+              <DuplicateComparison record={record} />
+              {record.anomaly && (
+                <details className="surface group px-5 py-3">
+                  <summary className="flex cursor-pointer items-center justify-between text-sm font-medium">
+                    Review priority (a risk signal, not a fraud probability)
+                    <ChevronDown
+                      className="size-4 transition-transform group-open:rotate-180"
+                      aria-hidden
+                    />
+                  </summary>
+                  <div className="mt-3">
+                    <AnomalyPanel anomaly={record.anomaly} />
+                  </div>
+                </details>
+              )}
+            </TabsContent>
+          )}
+
+          <TabsContent value="coding" className="mt-5">
+            <CodingPanel key={record.version} record={record} />
+          </TabsContent>
+
+          <TabsContent value="pay" className="mt-5 space-y-4">
             <div id="approval" className="space-y-3">
               <ApprovalPanel detail={data} />
               {record.allowed_actions.some(
@@ -199,30 +329,61 @@ function InvoiceContent() {
               )}
             </div>
             <PaymentWorkflow invoice={record} />
-            <InvoiceCorrections key={record.version} invoice={record} />
-          </section>
+          </TabsContent>
 
-          {/* 4 · Explain */}
-          <section id="explain" className="scroll-mt-4 space-y-3">
-            <StageHeading
-              n={4}
-              title="Explain"
-              note="Every recorded step, who did it and the evidence behind it."
-            />
-            <FlightRecorder invoiceId={invoiceId} />
-            {record.vendor_id && (
-              <Link
-                className="inline-block text-sm font-medium text-primary hover:underline"
-                to="/vendors"
-                search={{ vendorId: record.vendor_id, q: "", status: "" }}
-              >
-                View supplier profile
-              </Link>
+          <TabsContent value="history" className="mt-5 space-y-4">
+            <div
+              role="radiogroup"
+              aria-label="History view"
+              className="inline-flex rounded-lg border bg-card p-0.5 text-sm"
+            >
+              {(
+                [
+                  ["timeline", "Timeline"],
+                  ["graph", "Decision graph"],
+                  ["connections", "Connections"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={historyView === id}
+                  onClick={() => setHistoryView(id)}
+                  className={`rounded-md px-3 py-1 font-medium transition-colors ${
+                    historyView === id
+                      ? "bg-primary-soft text-accent-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {historyView === "timeline" && <FlightRecorder invoiceId={invoiceId} />}
+            {historyView === "graph" && (
+              <Suspense fallback={<Skeleton className="h-[460px] rounded-xl" />}>
+                <DecisionGraph record={record} />
+              </Suspense>
             )}
-            <details className="surface px-5 py-4 text-sm">
-              <summary className="cursor-pointer font-semibold">
-                Version history and supporting records
-              </summary>
+            {historyView === "connections" && (
+              <Suspense fallback={<Skeleton className="h-[460px] rounded-xl" />}>
+                <ConnectionsGraph record={record} />
+              </Suspense>
+            )}
+            <div className="flex flex-wrap items-center gap-4 text-sm">
+              {record.vendor_id && (
+                <Link
+                  className="font-medium text-primary hover:underline"
+                  to="/vendors"
+                  search={{ vendorId: record.vendor_id, q: "", status: "" }}
+                >
+                  View supplier profile
+                </Link>
+              )}
+            </div>
+            <details className="surface px-5 py-3 text-sm">
+              <summary className="cursor-pointer font-medium">Version history</summary>
               <ul className="mt-2 space-y-2">
                 {record.versions.map((version) => (
                   <li key={version.version}>
@@ -230,41 +391,124 @@ function InvoiceContent() {
                     {formatDate(version.created_at)}
                   </li>
                 ))}
-                {record.duplicate_candidates.map((candidate) => (
-                  <li key={candidate.id}>
-                    {humanize(candidate.match_type)} ·{" "}
-                    {candidate.matched_card_txn_id ?? candidate.matched_invoice_id} ·{" "}
-                    {candidate.reasons.join(", ")}
-                  </li>
-                ))}
               </ul>
             </details>
-          </section>
-        </div>
+          </TabsContent>
+        </Tabs>
       </div>
-    </div>
+    </DocumentFocusContext.Provider>
   );
 }
 
-function StageHeading({ n, title, note }: { n: number; title: string; note: string }) {
+/** Evidence-backed dismissal, only where the backend allows it for this finding. */
+function DismissFinding({
+  record,
+  findingId,
+}: {
+  record: InvoiceRecord;
+  findingId?: string | undefined;
+}) {
+  const { user } = useSession();
+  if (
+    !findingId ||
+    !record.allowed_actions.includes("dismiss_finding") ||
+    !record.validation_findings.some((f) => f.id === findingId && f.dismissible)
+  )
+    return null;
   return (
-    <header className="pt-2">
-      <h2 className="text-base font-semibold tracking-tight">
-        <span className="text-muted-foreground">{n} · </span>
-        {title}
-      </h2>
-      <p className="text-xs text-muted-foreground">{note}</p>
-    </header>
+    <details className="surface px-5 py-4 text-sm">
+      <summary className="cursor-pointer">Document dismissal</summary>
+      <WorkflowForm
+        label="Dismiss finding"
+        run={(fields) =>
+          api.dismiss(user.id, record.id, findingId, {
+            expected_version: record.version,
+            reason: value(fields, "reason"),
+          })
+        }
+      >
+        <Field name="reason" label="Evidence-backed reason" />
+      </WorkflowForm>
+    </details>
   );
 }
 
-function ReviewHeader({ detail }: { detail: InvoiceDetail }) {
-  const { invoice: inv, plainStatus } = detail;
+/** Side-by-side duplicate comparison, labelled candidate vs confirmed. */
+function DuplicateComparison({ record }: { record: InvoiceRecord }) {
+  if (!record.duplicate_candidates.length) return null;
+  return (
+    <section className="surface px-5 py-4" aria-labelledby="dupes-heading">
+      <h3 id="dupes-heading" className="text-sm font-semibold">
+        Possible duplicates
+      </h3>
+      <p className="text-xs text-muted-foreground">
+        This invoice compared with the records Sentinel matched. A person makes the final call.
+      </p>
+      <ul className="mt-3 space-y-3">
+        {record.duplicate_candidates.map((d) => (
+          <li key={d.id} className="grid gap-3 rounded-xl border p-3 text-sm sm:grid-cols-2">
+            <div>
+              <p className="eyebrow">This invoice</p>
+              <p className="font-medium">{record.vendor_name}</p>
+              <p className="figure text-xs text-muted-foreground">
+                #{record.invoice_number ?? "—"} · {formatDate(record.invoice_date)} ·{" "}
+                {formatMoney(record.amount_minor, record.currency ?? "CAD")}
+              </p>
+            </div>
+            <div>
+              <p className="eyebrow flex items-center gap-2">
+                Matched {d.matched_card_txn_id ? "card charge" : "invoice"}
+                <span
+                  className={`rounded-full px-1.5 py-px text-[10px] normal-case tracking-normal ${
+                    d.confirmed
+                      ? "bg-critical-soft text-critical-foreground"
+                      : "bg-warning-soft text-warning-foreground"
+                  }`}
+                >
+                  {d.confirmed ? "Confirmed match" : "Candidate"} · score {d.score}
+                </span>
+              </p>
+              {d.matched_invoice_id ? (
+                <Link
+                  className="font-medium text-primary hover:underline"
+                  to="/invoices/$invoiceId"
+                  params={{ invoiceId: d.matched_invoice_id }}
+                >
+                  {d.matched_invoice_id}
+                </Link>
+              ) : (
+                <p className="font-medium">{d.matched_card_txn_id}</p>
+              )}
+              <ul className="mt-1 list-inside list-disc text-xs text-muted-foreground">
+                {d.reasons.map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function ReviewHeader({
+  detail,
+  actionTarget,
+  onAction,
+  stagesNav,
+}: {
+  detail: InvoiceDetail;
+  actionTarget: string | null;
+  onAction: (id: string) => void;
+  stagesNav: React.ReactNode;
+}) {
+  const { invoice: inv, plainStatus, action } = detail;
   const blocking = inv.findings.find((f) => f.blocking);
-
+  const held = inv.status === "on_hold";
   return (
-    <section className="surface overflow-hidden">
-      <div className="flex flex-wrap items-start gap-6 px-6 py-5">
+    <section className="surface sticky top-2 z-30 overflow-hidden shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/95">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-3.5">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={inv.status} />
@@ -275,59 +519,79 @@ function ReviewHeader({ detail }: { detail: InvoiceDetail }) {
               </span>
             ) : null}
           </div>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">{inv.supplierName}</h1>
-          <p className="figure mt-0.5 text-sm text-muted-foreground">
-            {inv.number ? `Invoice #${inv.number}` : "Invoice number unreadable"} · {inv.id} ·{" "}
-            {inv.sourceRef}
+          <h1 className="mt-1 truncate text-xl font-semibold tracking-tight">{inv.supplierName}</h1>
+          <p className="figure truncate text-xs text-muted-foreground">
+            {inv.number ? `Invoice #${inv.number}` : "Invoice number unreadable"} · {inv.id} · Due{" "}
+            {formatDate(inv.dueDate, { month: "short", day: "numeric", year: "numeric" })}
+            {inv.dueDate ? ` (${dueLabel(inv.dueDate)})` : ""}
           </p>
         </div>
         <div className="text-right">
           <Money
             minor={inv.totalMinor}
             currency={inv.currency}
-            className="text-2xl font-semibold tracking-tight"
+            className="text-xl font-semibold tracking-tight"
           />
           {inv.currency === "USD" && detail.amountCadMinor !== null ? (
-            <p className="figure text-xs text-muted-foreground">
-              ≈ {formatMoney(detail.amountCadMinor, "CAD")} CAD at {inv.fxToCad} (invoice-date rate)
+            <p className="figure text-[11px] text-muted-foreground">
+              ≈ {formatMoney(detail.amountCadMinor, "CAD")} CAD at {inv.fxToCad}
             </p>
           ) : null}
-          <p className="figure mt-1 text-xs text-muted-foreground">
-            Due {formatDate(inv.dueDate, { month: "short", day: "numeric", year: "numeric" })}
-            {inv.dueDate ? ` · ${dueLabel(inv.dueDate)}` : ""}
-          </p>
         </div>
+        {actionTarget && (
+          // A link, not a button: it takes you to the step; the action itself lives there.
+          <Button asChild>
+            <a
+              href={`#${actionTarget}`}
+              onClick={(e) => {
+                e.preventDefault();
+                onAction(actionTarget);
+              }}
+            >
+              {action.label}
+              <ArrowRight aria-hidden />
+            </a>
+          </Button>
+        )}
       </div>
       <div
-        className={`flex flex-wrap items-center gap-4 border-t px-6 py-4 ${
-          inv.status === "on_hold"
+        className={`flex flex-wrap items-center gap-x-4 gap-y-2 border-t px-5 py-2 ${
+          held
             ? "bg-critical-soft"
             : inv.status === "needs_review"
               ? "bg-warning-soft"
               : "bg-secondary/60"
         }`}
       >
-        {inv.status === "on_hold" ? (
-          <PauseCircle className="size-5 shrink-0 text-critical-foreground" aria-hidden />
+        {held ? (
+          <PauseCircle className="size-4 shrink-0 text-critical-foreground" aria-hidden />
         ) : (
-          <ShieldCheck className="size-5 shrink-0 text-primary" aria-hidden />
+          <ShieldCheck className="size-4 shrink-0 text-primary" aria-hidden />
         )}
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">
-            {inv.status === "on_hold" ? "Payment paused" : plainStatus}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {blocking
-              ? blocking.whyItMatters
-              : (inv.findings[0]?.whyItMatters ?? `Owner: ${detail.owner}.`)}
-          </p>
-        </div>
+        <p className="min-w-0 flex-1 truncate text-sm">
+          <span className="font-medium">{held ? "Payment paused" : plainStatus}</span>
+          <span className="text-muted-foreground">
+            {" "}
+            · {blocking ? blocking.title : `Owner: ${detail.owner}`}
+          </span>
+        </p>
+        {stagesNav}
       </div>
     </section>
   );
 }
 
-function FindingCard({ finding, refs }: { finding: Finding; refs: unknown[] }) {
+function FindingCard({
+  finding,
+  refs,
+  invoiceId,
+}: {
+  finding: Finding;
+  refs: unknown[];
+  invoiceId: string;
+}) {
+  const focus = useDocumentFocus();
+  const anchorKey = anchorKeyForRefs(refs, invoiceId);
   const tone =
     finding.severity === "high"
       ? "border-l-critical"
@@ -335,7 +599,10 @@ function FindingCard({ finding, refs }: { finding: Finding; refs: unknown[] }) {
         ? "border-l-warning"
         : "border-l-border-strong";
   return (
-    <article className={`surface border-l-4 ${tone} px-5 py-4`}>
+    <article
+      id={findingAnchor(finding)}
+      className={`surface scroll-mt-40 border-l-4 ${tone} px-5 py-4`}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-[15px] font-semibold tracking-tight">{finding.title}</h2>
         {finding.blocking ? (
@@ -359,6 +626,16 @@ function FindingCard({ finding, refs }: { finding: Finding; refs: unknown[] }) {
         </div>
       </dl>
       <Collapsible className="mt-3">
+        {anchorKey && focus && (
+          <button
+            type="button"
+            onClick={() => focus.setFocusKey(anchorKey)}
+            className="mr-4 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+          >
+            <ScanSearch className="size-3.5" aria-hidden />
+            {focus.available.has(anchorKey) ? "Show on document" : "Where on the document?"}
+          </button>
+        )}
         <CollapsibleTrigger className="group inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
           See evidence{" "}
           <ChevronDown
@@ -366,14 +643,14 @@ function FindingCard({ finding, refs }: { finding: Finding; refs: unknown[] }) {
             aria-hidden
           />
         </CollapsibleTrigger>
-        <CollapsibleContent>
+        <CollapsibleContent className="collapsible-content">
           {refs.length > 0 ? (
             <Evidence items={refs} />
           ) : (
             <p className="mt-2 text-xs text-muted-foreground">No supporting records attached.</p>
           )}
           <p className="mt-2 text-[11px] text-muted-foreground/80">
-            Check: {humanize(finding.code)}
+            Check: {humanize(finding.code)} · deterministic rule
           </p>
         </CollapsibleContent>
       </Collapsible>
@@ -407,57 +684,16 @@ function Row({
 
 function ExtractedDetails({ detail }: { detail: InvoiceDetail }) {
   const inv = detail.invoice;
-  const unknown = <span className="text-warning-foreground">Needs a person</span>;
   const record = detail.record;
-  const uncertain = new Set(record.uncertain_fields);
-  const check = (present: boolean, ...keys: string[]): "ok" | "review" =>
-    present && !keys.some((k) => uncertain.has(k)) ? "ok" : "review";
-  const read = [inv.number, inv.issueDate, inv.subtotalMinor, inv.totalMinor].filter(
-    (v) => v !== null && v !== undefined,
-  ).length;
   return (
-    <section className="surface rise-in px-5 py-4" aria-labelledby="extracted-heading">
+    <section aria-labelledby="extracted-heading">
       <h2 id="extracted-heading" className="text-sm font-semibold">
-        Extracted details
+        Record details
       </h2>
       <p className="text-xs text-muted-foreground">
-        {read} of 4 key fields read · ✓ means read from the document, ? means a person must confirm.
+        Where this invoice sits in Brim. What was read from the document is shown above.
       </p>
       <dl className="mt-2 divide-y">
-        <Row label="Supplier" check={check(!!inv.supplierName, "vendor", "vendor_name")}>
-          {inv.supplierName}
-        </Row>
-        <Row label="Invoice number" check={check(!!inv.number, "invoice_number")}>
-          {inv.number ? <span className="figure">{inv.number}</span> : unknown}
-        </Row>
-        <Row label="Issued" check={check(!!inv.issueDate, "invoice_date")}>
-          {inv.issueDate ? (
-            <span className="figure">
-              {formatDate(inv.issueDate, { year: "numeric", month: "short", day: "numeric" })}
-            </span>
-          ) : (
-            unknown
-          )}
-        </Row>
-        <Row label="Subtotal" check={check(inv.subtotalMinor !== null, "subtotal")}>
-          {inv.subtotalMinor === null ? (
-            unknown
-          ) : (
-            <Money minor={inv.subtotalMinor} currency={inv.currency} />
-          )}
-        </Row>
-        {inv.taxes.map((t) => (
-          <Row key={t.label} label={t.label}>
-            <Money minor={t.amountMinor} currency={inv.currency} showCode={false} />
-          </Row>
-        ))}
-        <Row label="Total" check={check(inv.totalMinor !== null, "total")}>
-          {inv.totalMinor === null ? (
-            unknown
-          ) : (
-            <Money minor={inv.totalMinor} currency={inv.currency} className="font-semibold" />
-          )}
-        </Row>
         <Row label="Department">{inv.department}</Row>
         <Row label="Version">{record.version}</Row>
         {record.remit["method"] != null && (
@@ -465,11 +701,6 @@ function ExtractedDetails({ detail }: { detail: InvoiceDetail }) {
             {String(record.remit["method"])} {String(record.remit["account_masked"] ?? "")}
           </Row>
         )}
-        {inv.poNumber ? (
-          <Row label="Purchase order">
-            <span className="figure">{inv.poNumber}</span>
-          </Row>
-        ) : null}
       </dl>
       <p className="mt-3 text-xs text-muted-foreground">
         Details {humanize(record.provenance)}
@@ -480,23 +711,6 @@ function ExtractedDetails({ detail }: { detail: InvoiceDetail }) {
           </span>
         )}
       </p>
-      {record.anomaly && (
-        <details className="mt-3 text-sm">
-          <summary className="cursor-pointer font-medium">Review priority</summary>
-          <p className="mt-2 text-muted-foreground">{record.anomaly.label}</p>
-          {record.anomaly.status === "INSUFFICIENT_HISTORY" && (
-            <p>
-              Limited supplier history ·{" "}
-              {String(record.anomaly.inputs["history_count"] ?? "Unknown")} prior invoices
-            </p>
-          )}
-          <ul className="mt-1">
-            {record.anomaly.signals.map((signal, index) => (
-              <li key={index}>{String(signal["explanation"] ?? "")}</li>
-            ))}
-          </ul>
-        </details>
-      )}
       {record.evidence_refs.length > 0 && (
         <details className="mt-3 text-sm">
           <summary className="cursor-pointer font-medium">Source references</summary>
@@ -516,7 +730,7 @@ const CHECK_ICON: Record<CheckResult, { icon: typeof CheckCircle2; cls: string; 
 
 function ChecksPanel({ detail }: { detail: InvoiceDetail }) {
   return (
-    <section className="surface px-5 py-4" aria-labelledby="checks-heading">
+    <section aria-labelledby="checks-heading">
       <h2 id="checks-heading" className="text-sm font-semibold">
         Checks
       </h2>

@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { findUser } from "@/lib/domain/roles";
 import type { Invoice } from "@/lib/domain/types";
 import { SEED_INVOICES } from "./fixtures";
-import { buildHomeSummary, checksFor, eligibleReleaser, filterInvoices, primaryActionFor } from "./rules";
+import {
+  buildHomeSummary,
+  checksFor,
+  eligibleReleaser,
+  filterInvoices,
+  primaryActionFor,
+} from "./rules";
 
 const byId = (id: string): Invoice => {
   const inv = SEED_INVOICES.find((i) => i.id === id);
@@ -26,7 +32,8 @@ describe("next action", () => {
   });
 
   it("auditors only ever get a read-only action", () => {
-    for (const inv of SEED_INVOICES) expect(primaryActionFor(inv, auditor).kind).toBe("view_record");
+    for (const inv of SEED_INVOICES)
+      expect(primaryActionFor(inv, auditor).kind).toBe("view_record");
   });
 
   it("requesters cannot resolve holds", () => {
@@ -37,7 +44,9 @@ describe("next action", () => {
 describe("home summary", () => {
   it("AP clerk has no approvals; Finance Manager sees theirs", () => {
     expect(buildHomeSummary(SEED_INVOICES, clerk).readyForApproval).toHaveLength(0);
-    const ids = buildHomeSummary(SEED_INVOICES, financeManager).readyForApproval.map((t) => t.invoice.id);
+    const ids = buildHomeSummary(SEED_INVOICES, financeManager).readyForApproval.map(
+      (t) => t.invoice.id,
+    );
     expect(ids).toEqual(expect.arrayContaining(["AP-00405", "AP-00408", "AP-00410"]));
   });
 
@@ -47,7 +56,8 @@ describe("home summary", () => {
 
   it("requester only sees their own submissions", () => {
     const s = buildHomeSummary(SEED_INVOICES, requester);
-    for (const t of [...s.needsAttention, ...s.upcomingPayments]) expect(t.invoice.requesterId).toBe("U020");
+    for (const t of [...s.needsAttention, ...s.upcomingPayments])
+      expect(t.invoice.requesterId).toBe("U020");
   });
 
   it("blocking holds are listed before advisory reviews", () => {
@@ -77,9 +87,15 @@ describe("checks", () => {
 
 describe("inbox filter", () => {
   it("search matches supplier name case-insensitively", () => {
-    expect(filterInvoices(SEED_INVOICES, { q: "cascadia" }).map((i) => i.id).sort()).toEqual(["AP-00409", "AP-00412"]);
+    expect(
+      filterInvoices(SEED_INVOICES, { q: "cascadia" })
+        .map((i) => i.id)
+        .sort(),
+    ).toEqual(["AP-00409", "AP-00412"]);
   });
   it("credit notes are grouped under Done, never Payments", () => {
-    expect(filterInvoices(SEED_INVOICES, { status: "payment" }).some((i) => i.kind === "credit_note")).toBe(false);
+    expect(
+      filterInvoices(SEED_INVOICES, { status: "payment" }).some((i) => i.kind === "credit_note"),
+    ).toBe(false);
   });
 });

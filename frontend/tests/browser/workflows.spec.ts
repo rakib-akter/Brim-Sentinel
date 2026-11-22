@@ -10,6 +10,15 @@ async function switchActor(page: Page, current: string, next: string) {
   await expect(page.getByRole("button", { name: new RegExp(next) })).toBeVisible();
 }
 
+/** Tabs only respond once the page has hydrated, so retry the click until the tab is selected. */
+async function openTab(page: Page, name: string | RegExp) {
+  const tab = page.getByRole("tab", { name });
+  await expect(async () => {
+    await tab.click();
+    await expect(tab).toHaveAttribute("aria-selected", "true", { timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
+}
+
 test("Detect → Resolve → Settle → Explain using seeded FastAPI records", async ({ page }) => {
   await page.goto("/audit");
   await expect(page.getByRole("alert")).toContainText("access requires an authorized demo role");
@@ -22,7 +31,11 @@ test("Detect → Resolve → Settle → Explain using seeded FastAPI records", a
   await expect(page).toHaveURL(new RegExp(invoicePath));
   await expect(page.getByText("Payment paused", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Schedule simulated payment" })).toHaveCount(0);
+  // The source-grounded document review opens first; the case lives in its own tab.
+  await expect(page.getByText("What Sentinel read")).toBeVisible();
+  await openTab(page, /Case/);
   const resolution = page.locator("#resolution");
+  await resolution.getByText("Record the callback result").click();
   const contact = resolution.getByLabel("Trusted contact");
   await contact.selectOption({ index: 1 });
   await resolution.getByLabel("Callback time (local time)").fill("2026-11-03T10:15");
@@ -58,6 +71,7 @@ test("Detect → Resolve → Settle → Explain using seeded FastAPI records", a
     .getByRole("row", { name: /Cascadia.*1625/ })
     .getByRole("link", { name: "Cascadia Cartage Ltd.", exact: true })
     .click();
+  await openTab(page, "Approval & payment");
   await page.getByLabel("Decision", { exact: true }).selectOption("APPROVED");
   await page.getByRole("button", { name: "Record approval decision" }).click();
   await expect(page.getByRole("button", { name: "Record approval decision" })).toHaveCount(0);
@@ -76,6 +90,7 @@ test("Detect → Resolve → Settle → Explain using seeded FastAPI records", a
   await expect(page.locator("#payment")).toContainText("Released by U003");
 
   await switchActor(page, "Elise Tremblay", "Hannah Lindqvist");
+  await openTab(page, "History");
   await page.getByRole("button", { name: "See payment journey" }).click();
   await expect(page.getByText("Simulated settlement recorded", { exact: true })).toBeVisible();
   await expect(page.getByText("Simulated payment released", { exact: true })).toBeVisible();
@@ -94,7 +109,11 @@ test("intake creates one draft and reports an already received file", async ({ p
   );
   for (const label of ["1 draft created", "Invoices already in the inbox"]) {
     await page.goto("/invoices");
-    await page.getByRole("button", { name: "Upload invoice", exact: true }).click();
+    // The button only opens the dialog once the page has hydrated; retry the click until it does.
+    await expect(async () => {
+      await page.getByRole("button", { name: "Upload invoice", exact: true }).click();
+      await expect(page.getByLabel("Choose invoice files")).toBeAttached({ timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
     await page.getByLabel("Choose invoice files").setInputFiles(file);
     await page.getByRole("button", { name: "Upload 1", exact: true }).click();
     await expect(page.getByText(label, { exact: true })).toBeVisible();

@@ -30,12 +30,24 @@ export function InvoiceTable({ tasks, caption }: { tasks: InvoiceTask[]; caption
         <caption className="sr-only">{caption}</caption>
         <thead>
           <tr className="border-b text-left text-xs text-muted-foreground">
-            <th scope="col" className="px-5 py-2.5 font-medium">Supplier</th>
-            <th scope="col" className="px-3 py-2.5 font-medium">Invoice</th>
-            <th scope="col" className="px-3 py-2.5 text-right font-medium">Amount</th>
-            <th scope="col" className="px-3 py-2.5 font-medium">Due</th>
-            <th scope="col" className="px-3 py-2.5 font-medium">Priority</th>
-            <th scope="col" className="px-3 py-2.5 font-medium">Status</th>
+            <th scope="col" className="px-5 py-2.5 font-medium">
+              Supplier
+            </th>
+            <th scope="col" className="px-3 py-2.5 font-medium">
+              Invoice
+            </th>
+            <th scope="col" className="px-3 py-2.5 text-right font-medium">
+              Amount
+            </th>
+            <th scope="col" className="px-3 py-2.5 font-medium">
+              Due
+            </th>
+            <th scope="col" className="px-3 py-2.5 font-medium">
+              Priority
+            </th>
+            <th scope="col" className="px-3 py-2.5 font-medium">
+              Status
+            </th>
             <th scope="col" className="px-5 py-2.5 text-right font-medium">
               <span className="sr-only">Next action</span>
             </th>
@@ -45,7 +57,10 @@ export function InvoiceTable({ tasks, caption }: { tasks: InvoiceTask[]; caption
           {tasks.map((task) => {
             const inv = task.invoice;
             const days = daysUntil(inv.dueDate);
-            const urgent = days !== null && days <= 3 && !["settled", "credit_recorded", "released"].includes(inv.status);
+            const urgent =
+              days !== null &&
+              days <= 3 &&
+              !["settled", "credit_recorded", "released"].includes(inv.status);
             return (
               <tr key={inv.id} className="transition-colors hover:bg-secondary/50">
                 <td className="max-w-[280px] px-5 py-3">
@@ -60,15 +75,25 @@ export function InvoiceTable({ tasks, caption }: { tasks: InvoiceTask[]; caption
                     <LanguageBadge language={inv.language} scanned={inv.scanned} />
                   </div>
                   <div className="mt-0.5 flex items-center gap-2">
-                    <span className="truncate text-xs text-muted-foreground">{task.plainStatus}</span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {task.plainStatus}
+                    </span>
                   </div>
                   {inv.status === "processing" ? (
-                    <div className="processing-bar mt-2 h-1 w-40 rounded-full bg-primary-soft" role="progressbar" aria-label="Reading document" />
+                    <div
+                      className="processing-bar mt-2 h-1 w-40 rounded-full bg-primary-soft"
+                      role="progressbar"
+                      aria-label="Reading document"
+                    />
                   ) : null}
                 </td>
                 <td className="px-3 py-3">
-                  <div className="figure text-foreground">{inv.number ?? <span className="text-muted-foreground">Unreadable</span>}</div>
-                  <div className="figure whitespace-nowrap text-[11px] text-muted-foreground">{inv.id}</div>
+                  <div className="figure text-foreground">
+                    {inv.number ?? <span className="text-muted-foreground">Unreadable</span>}
+                  </div>
+                  <div className="figure whitespace-nowrap text-[11px] text-muted-foreground">
+                    {inv.id}
+                  </div>
                   <IntakeFlag task={task} />
                 </td>
                 <td className="px-3 py-3 text-right">
@@ -77,7 +102,9 @@ export function InvoiceTable({ tasks, caption }: { tasks: InvoiceTask[]; caption
                 <td className="px-3 py-3">
                   <div className="figure">{formatDate(inv.dueDate)}</div>
                   {inv.dueDate ? (
-                    <div className={`whitespace-nowrap text-[11px] ${urgent ? "font-medium text-warning-foreground" : "text-muted-foreground"}`}>
+                    <div
+                      className={`whitespace-nowrap text-[11px] ${urgent ? "font-medium text-warning-foreground" : "text-muted-foreground"}`}
+                    >
                       {dueLabel(inv.dueDate)}
                     </div>
                   ) : null}

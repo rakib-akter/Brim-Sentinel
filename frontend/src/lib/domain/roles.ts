@@ -58,13 +58,62 @@ export const ROLES: Record<RoleId, RoleDefinition> = {
 
 /** Synthetic Harborline Logistics users — demo identities, not authentication. */
 export const DEMO_USERS: User[] = [
-  { id: "U007", name: "Jordan Ellis", initials: "JE", title: "AP Clerk", role: "ap_clerk", department: "Finance" },
-  { id: "U020", name: "Sam Okoro", initials: "SO", title: "Dispatch Coordinator", role: "requester", department: "Operations" },
-  { id: "U009", name: "Amélie Gagnon", initials: "AG", title: "Operations Manager", role: "dept_approver", department: "Operations" },
-  { id: "U003", name: "Priya Raman", initials: "PR", title: "Finance Manager", role: "finance_manager", department: "Finance" },
-  { id: "U002", name: "Marcus Lindqvist", initials: "ML", title: "Controller", role: "controller", department: "Finance" },
-  { id: "U001", name: "Evelyn Hart", initials: "EH", title: "Chief Financial Officer", role: "cfo", department: "Executive" },
-  { id: "U030", name: "Nadia Rossi", initials: "NR", title: "Internal Auditor", role: "auditor", department: "Audit" },
+  {
+    id: "U007",
+    name: "Jordan Ellis",
+    initials: "JE",
+    title: "AP Clerk",
+    role: "ap_clerk",
+    department: "Finance",
+  },
+  {
+    id: "U020",
+    name: "Sam Okoro",
+    initials: "SO",
+    title: "Dispatch Coordinator",
+    role: "requester",
+    department: "Operations",
+  },
+  {
+    id: "U009",
+    name: "Amélie Gagnon",
+    initials: "AG",
+    title: "Operations Manager",
+    role: "dept_approver",
+    department: "Operations",
+  },
+  {
+    id: "U003",
+    name: "Priya Raman",
+    initials: "PR",
+    title: "Finance Manager",
+    role: "finance_manager",
+    department: "Finance",
+  },
+  {
+    id: "U002",
+    name: "Marcus Lindqvist",
+    initials: "ML",
+    title: "Controller",
+    role: "controller",
+    department: "Finance",
+  },
+  {
+    id: "U001",
+    name: "Evelyn Hart",
+    initials: "EH",
+    title: "Chief Financial Officer",
+    role: "cfo",
+    department: "Executive",
+  },
+  {
+    id: "U030",
+    name: "Nadia Rossi",
+    initials: "NR",
+    title: "Internal Auditor",
+    role: "auditor",
+    department: "Audit",
+  },
 ];
 
 export const DEFAULT_USER_ID = "U007";

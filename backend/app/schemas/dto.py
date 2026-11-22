@@ -216,6 +216,25 @@ class AnomalyOut(BaseModel):
     inputs: dict[str, Any]
 
 
+class PageSizeOut(BaseModel):
+    width: float
+    height: float
+
+
+class LayoutAnchorOut(BaseModel):
+    key: str = Field(description="vendor_name, invoice_number, invoice_date, due_date, po_number, subtotal, "
+                                 "total, tax:<i>, line:<n> or remit")
+    page: int
+    box: list[float] = Field(description="x0, y0, x1, y1 in the page's units (see pages)")
+    confidence: float | None = Field(None, description="OCR confidence; null when read from the PDF text layer")
+
+
+class DocumentLayoutOut(BaseModel):
+    source: Literal["text", "ocr", "none"]
+    pages: list[PageSizeOut]
+    anchors: list[LayoutAnchorOut]
+
+
 class InvoiceDetail(InvoiceSummary):
     provenance: str
     language: str | None

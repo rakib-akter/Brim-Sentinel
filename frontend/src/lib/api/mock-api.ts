@@ -25,7 +25,9 @@ const wait = (ms = 120) => new Promise((r) => setTimeout(r, ms));
 function advanceProcessing() {
   const now = Date.now();
   store = store.map((inv) =>
-    inv.status === "processing" && inv.processingStartedAt && now - inv.processingStartedAt > PROCESSING_MS
+    inv.status === "processing" &&
+    inv.processingStartedAt &&
+    now - inv.processingStartedAt > PROCESSING_MS
       ? {
           ...inv,
           status: "needs_review",

@@ -53,8 +53,15 @@ const STATE: Record<string, InvoiceStatus> = {
   CREDIT_RECORDED: "credit_recorded",
 };
 
+// The API labels resolve actions "Resolve: <issue title>". Rows already show the issue, so the
+// button carries one short verb and every row in a list lines up.
+export function shortActionLabel(kind: string, label: string): string {
+  return kind === "resolve_issue" ? "Review case" : label;
+}
+
 export function presentInvoice(row: Schema.InvoiceSummary): InvoiceTask {
-  const { kind, label } = row.primary_action;
+  const kind = row.primary_action.kind;
+  const label = shortActionLabel(kind, row.primary_action.label);
   return {
     record: row,
     invoice: {

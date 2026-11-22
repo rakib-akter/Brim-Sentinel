@@ -508,6 +508,22 @@ export interface TaskOut {
   primary_action: PrimaryAction;
 }
 
+export interface DocumentLayoutOut {
+  source: "text" | "ocr" | "none";
+  pages: Array<{ width: number; height: number }>;
+  anchors: Array<LayoutAnchorOut>;
+}
+
+export interface LayoutAnchorOut {
+  /** vendor_name, invoice_number, invoice_date, due_date, po_number, subtotal, total, tax:<i>, line:<n>, remit */
+  key: string;
+  page: number;
+  /** x0, y0, x1, y1 in the page's units */
+  box: Array<number>;
+  /** OCR confidence; null when read from the PDF text layer */
+  confidence: number | null;
+}
+
 export interface UploadOut {
   created: boolean;
   invoice: InvoiceSummary;
@@ -570,9 +586,7 @@ export interface VerificationRequest {
   expected_row_version?: number | null;
   trusted_contact_id?: string | null;
   method:
-    | "phone_callback_to_contact_on_file"
-    | "video_call_to_contact_on_file"
-    | "in_person_meeting";
+    "phone_callback_to_contact_on_file" | "video_call_to_contact_on_file" | "in_person_meeting";
   occurred_at: string;
   outcome: "CONFIRMED" | "DENIED";
   notes: string;

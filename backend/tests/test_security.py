@@ -97,3 +97,13 @@ def test_maker_checker_on_manual_versions(client):
                     json={"expected_version": d["version"], "reason": "Same firm, different legal-name spelling."})
     assert r.status_code == 403 and r.json()["error"]["code"] == "MAKER_CANNOT_DISMISS"
     assert "U003" not in d["eligible_releasers"]
+
+
+def test_document_layout_and_pages_follow_invoice_visibility(client):
+    layout = client.get(f"/api/v1/invoices/{HARLOW}/document/layout", headers=H("U004"))
+    assert layout.status_code == 200
+    body = layout.json()
+    assert body["pages"] and body["source"] in {"text", "ocr", "none"}
+    page = client.get(f"/api/v1/invoices/{HARLOW}/document/pages/1", headers=H("U004"))
+    assert page.status_code == 200 and page.headers["content-type"].startswith("image/")
+    assert client.get(f"/api/v1/invoices/{HARLOW}/document/pages/99", headers=H("U004")).status_code == 404
