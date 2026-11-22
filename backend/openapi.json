@@ -5489,6 +5489,450 @@
           }
         }
       }
+    },
+    "/api/v1/settings/approval-policy": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Policy",
+        "description": "The approval rules in force, in plain words, with what a controller/admin may change.",
+        "operationId": "get_policy_api_v1_settings_approval_policy_get",
+        "parameters": [
+          {
+            "name": "x-demo-user-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Demo identity \u2014 not authentication.",
+              "title": "X-Demo-User-Id"
+            },
+            "description": "Demo identity \u2014 not authentication."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalPolicyOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update Policy",
+        "description": "Controller/admin only. Thresholds can be made stricter, never looser than each role's authority\nlimit; separation-of-duties and PO rules are locked. Audited; open, not-yet-approved invoices are\nre-routed under the new rules.",
+        "operationId": "update_policy_api_v1_settings_approval_policy_patch",
+        "parameters": [
+          {
+            "name": "x-demo-user-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Demo identity \u2014 not authentication.",
+              "title": "X-Demo-User-Id"
+            },
+            "description": "Demo identity \u2014 not authentication."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalPolicyUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalPolicyOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        }
+      }
+    },
+    "/api/v1/users/{user_id}/away": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Start Away",
+        "description": "Mark an approver as away with a delegate (self, or anyone for a controller/admin). Their pending\napproval steps move to the delegate (P08).",
+        "operationId": "start_away_api_v1_users__user_id__away_post",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "x-demo-user-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Demo identity \u2014 not authentication.",
+              "title": "X-Demo-User-Id"
+            },
+            "description": "Demo identity \u2014 not authentication."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AwayRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DelegationOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        }
+      }
+    },
+    "/api/v1/users/{user_id}/back": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "End Away",
+        "description": "Mark an approver as back. Steps that were delegated and not yet decided return to them.",
+        "operationId": "end_away_api_v1_users__user_id__back_post",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "x-demo-user-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Demo identity \u2014 not authentication.",
+              "title": "X-Demo-User-Id"
+            },
+            "description": "Demo identity \u2014 not authentication."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DelegationOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5594,6 +6038,219 @@
           "decision"
         ],
         "title": "ApprovalDecisionRequest"
+      },
+      "ApprovalPolicyOut": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "values": {
+            "$ref": "#/components/schemas/ApprovalPolicyValues"
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/ApprovalPolicyValues"
+          },
+          "maximums": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Maximums"
+          },
+          "minimum_minor": {
+            "type": "integer",
+            "title": "Minimum Minor"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalPolicyRule"
+            },
+            "type": "array",
+            "title": "Rules"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          },
+          "updated_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By Name"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "can_edit": {
+            "type": "boolean",
+            "title": "Can Edit"
+          },
+          "rerouted_invoice_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Rerouted Invoice Ids",
+            "default": []
+          },
+          "changed": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Changed",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "values",
+          "defaults",
+          "maximums",
+          "minimum_minor",
+          "rules",
+          "updated_by",
+          "updated_at",
+          "reason",
+          "can_edit"
+        ],
+        "title": "ApprovalPolicyOut"
+      },
+      "ApprovalPolicyRule": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "editable": {
+            "type": "string",
+            "enum": [
+              "threshold",
+              "switch",
+              "locked",
+              "delegation"
+            ],
+            "title": "Editable"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "editable"
+        ],
+        "title": "ApprovalPolicyRule"
+      },
+      "ApprovalPolicyUpdate": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "title": "Expected Version",
+            "description": "Policy version the client edited (409 if stale)."
+          },
+          "values": {
+            "$ref": "#/components/schemas/ApprovalPolicyValues"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version",
+          "values",
+          "reason"
+        ],
+        "title": "ApprovalPolicyUpdate"
+      },
+      "ApprovalPolicyValues": {
+        "properties": {
+          "dept_manager_up_to_minor": {
+            "type": "integer",
+            "title": "Dept Manager Up To Minor",
+            "description": "P01/P02: department manager approves alone up to this."
+          },
+          "controller_over_minor": {
+            "type": "integer",
+            "title": "Controller Over Minor",
+            "description": "P03: controller approves too above this."
+          },
+          "cfo_over_minor": {
+            "type": "integer",
+            "title": "Cfo Over Minor",
+            "description": "P04: CFO approves too above this."
+          },
+          "fm_release_up_to_minor": {
+            "type": "integer",
+            "title": "Fm Release Up To Minor",
+            "description": "P09/P10: finance manager may release up to this."
+          },
+          "new_vendor_needs_fm": {
+            "type": "boolean",
+            "title": "New Vendor Needs Fm",
+            "description": "P05: new/pending suppliers need the finance manager."
+          },
+          "legal_vendor_needs_fm": {
+            "type": "boolean",
+            "title": "Legal Vendor Needs Fm",
+            "description": "P06: legal suppliers need the finance manager."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dept_manager_up_to_minor",
+          "controller_over_minor",
+          "cfo_over_minor",
+          "fm_release_up_to_minor",
+          "new_vendor_needs_fm",
+          "legal_vendor_needs_fm"
+        ],
+        "title": "ApprovalPolicyValues",
+        "description": "Editable approval policy. Amounts are CAD minor units (cents)."
       },
       "ApprovalStepOut": {
         "properties": {
@@ -5956,6 +6613,33 @@
           "notes"
         ],
         "title": "AuthorizeRouteRequest"
+      },
+      "AwayRequest": {
+        "properties": {
+          "delegate_user_id": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Delegate User Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "delegate_user_id"
+        ],
+        "title": "AwayRequest"
       },
       "BankChangeCreate": {
         "properties": {
@@ -7033,6 +7717,26 @@
           "work_items"
         ],
         "title": "DashboardOut"
+      },
+      "DelegationOut": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserOut"
+          },
+          "rerouted_invoice_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Rerouted Invoice Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user",
+          "rerouted_invoice_ids"
+        ],
+        "title": "DelegationOut"
       },
       "DemoIdentitiesOut": {
         "properties": {
