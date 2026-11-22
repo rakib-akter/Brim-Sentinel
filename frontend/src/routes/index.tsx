@@ -55,11 +55,11 @@ export const Route = createFileRoute("/")({
 function OverviewPage() {
   const { user, permissions } = useSession();
   return (
-    <div className="space-y-8">
+    <div className="space-y-9">
       <PageHeader
         eyebrow={formatDate(today(), { weekday: "long", month: "long", day: "numeric" })}
-        title="Your AP work, prioritized"
-        description={`Signed in as ${user.name} (${ROLES[user.role].label}, demo identity). The most urgent item is at the top, with one next step each.`}
+        title="Your finance workspace"
+        description={`A clear view of what needs attention, what is awaiting approval, and what happens next. Viewing as ${ROLES[user.role].label} (demo).`}
         actions={
           permissions.includes("invoice.upload") ? (
             <>
@@ -103,8 +103,8 @@ function OverviewContent() {
 
   return (
     <>
-      <section className="surface" aria-label="Key numbers">
-        <dl className="stagger grid grid-cols-2 divide-y sm:grid-cols-3 sm:divide-y-0 lg:grid-cols-5 lg:divide-x">
+      <section className="surface overflow-hidden" aria-label="Key numbers">
+        <dl className="grid grid-cols-2 divide-y divide-border/70 sm:grid-cols-3 sm:divide-y-0 lg:grid-cols-5 lg:divide-x lg:divide-border/70">
           <Kpi
             label="Invoices checked"
             value={invoices.length}
@@ -140,8 +140,8 @@ function OverviewContent() {
         </dl>
       </section>
 
-      <div className="grid items-start gap-6 lg:grid-cols-5">
-        <div className="space-y-3 lg:col-span-3">
+      <div className="grid items-start gap-5 lg:grid-cols-5">
+        <div className="space-y-4 lg:col-span-3">
           {top && (
             <p className="text-sm text-muted-foreground">
               <span className="font-medium text-foreground">Start here:</span>{" "}
@@ -184,7 +184,7 @@ function OverviewContent() {
           </TaskSection>
         </div>
 
-        <div className="space-y-6 lg:col-span-2">
+        <div className="space-y-5 lg:col-span-2">
           <TaskSection
             title="Ready for approval"
             description="Invoices waiting for a decision."
@@ -250,7 +250,10 @@ function OverviewContent() {
       </div>
 
       <GuidedDemo />
-      <HowSentinelHelps />
+      <details className="group border-t border-border/80 pt-5">
+        <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">How Sentinel works · Detect, Resolve, Settle, Explain</summary>
+        <div className="mt-5"><HowSentinelHelps /></div>
+      </details>
 
       {data.workItems.length > 0 && (
         <details id="intake-items" className="surface group overflow-hidden">
@@ -295,15 +298,15 @@ function Kpi({
 }) {
   const body = (
     <>
-      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dt className="text-[11px] font-medium tracking-[0.015em] text-muted-foreground">{label}</dt>
       <dd
-        className={`figure mt-0.5 text-xl font-semibold tracking-tight ${
+        className={`figure mt-2 text-[25px] leading-none font-semibold tracking-[-0.045em] ${
           tone === "critical" && value !== 0 ? "text-critical-foreground" : ""
         }`}
       >
         {typeof value === "number" ? <CountUp value={value} /> : value}
       </dd>
-      <dd className="text-[11px] text-muted-foreground">{hint}</dd>
+      <dd className="mt-2 text-[11px] text-muted-foreground">{hint}</dd>
     </>
   );
   return (
@@ -312,12 +315,12 @@ function Kpi({
         <Link
           to={to}
           search={search as never}
-          className="block h-full px-5 py-3.5 transition-colors hover:bg-secondary/60"
+          className="block h-full px-5 py-5 transition-colors hover:bg-secondary/40 md:px-6"
         >
           {body}
         </Link>
       ) : (
-        <div className="px-5 py-3.5">{body}</div>
+        <div className="px-5 py-5 md:px-6">{body}</div>
       )}
     </div>
   );
