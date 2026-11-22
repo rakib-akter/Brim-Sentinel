@@ -109,7 +109,7 @@ export function TaskRow({
         </div>
         {status}
         <div className="mt-2 flex items-center justify-between gap-3">
-          <p className="truncate text-[11px] text-muted-foreground">{meta}</p>
+          <p className="min-w-0 truncate text-[11px] text-muted-foreground">{meta}</p>
           <ActionButton task={task} />
         </div>
       </li>
@@ -117,18 +117,24 @@ export function TaskRow({
   }
 
   return (
-    <li className="relative flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-secondary/60">
+    <li className="relative flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 transition-colors hover:bg-secondary/60">
       <span
         className={`absolute inset-y-3 left-0 w-[3px] rounded-r ${inv.risk ? RAIL[inv.risk] : "bg-border"}`}
         aria-hidden
       />
-      <div className="min-w-0 flex-1">
+      <div className="min-w-[14rem] flex-1">
         {title}
         {status}
-        <p className="mt-0.5 text-[11px] text-muted-foreground">{meta}</p>
+        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{meta}</p>
       </div>
-      <Money minor={inv.totalMinor} currency={inv.currency} className="text-sm font-medium" />
-      <ActionButton task={task} />
+      <div className="ml-auto flex shrink-0 items-center gap-4">
+        <Money
+          minor={inv.totalMinor}
+          currency={inv.currency}
+          className="whitespace-nowrap text-sm font-medium"
+        />
+        <ActionButton task={task} />
+      </div>
     </li>
   );
 }
