@@ -78,10 +78,10 @@ function AuditEvents() {
   const events = useQuery(auditQuery(user.id, filters, offset));
   return (
     <>
-      <section className="surface space-y-4 px-5 py-4">
+      <section className="surface space-y-5 px-6 py-6">
         <form
           key={initial?.toString() ?? ""}
-          className="flex flex-wrap items-end gap-3"
+          className="flex flex-wrap items-end gap-4"
           onSubmit={(event) => {
             event.preventDefault();
             const data = new FormData(event.currentTarget);
@@ -114,7 +114,7 @@ function AuditEvents() {
           />
           <Button type="submit">Apply filters</Button>
         </form>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-3 border-t border-border/80 pt-4">
           <WorkflowForm
             label="Verify hash chain"
             refresh={false}
@@ -160,7 +160,7 @@ function AuditEvents() {
             )}
             <ul className="divide-y">
               {events.data.items.map((event) => (
-                <li key={event.id} className="px-5 py-3 text-sm">
+                <li key={event.id} className="px-6 py-5 text-sm transition-colors hover:bg-secondary/30">
                   <p className="font-medium">
                     {actionLabel(event.action)}
                     {isNotableResult(event.result) && ` · ${plain(event.result)}`}
@@ -209,7 +209,7 @@ function AuditEvents() {
                 </li>
               ))}
             </ul>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t px-5 py-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/80 px-6 py-4 text-sm">
               <span>
                 {events.data.total ? offset + 1 : 0}–{offset + events.data.items.length} of{" "}
                 {events.data.total} events
