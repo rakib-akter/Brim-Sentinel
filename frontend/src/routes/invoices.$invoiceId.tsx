@@ -1,14 +1,15 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ArrowRight,
   FileSearch,
-  ListChecks,
-  Network,
+  Brain,
+  History,
+  MessagesSquare,
   ScanSearch,
-  Share2,
+  Wallet,
   CheckCircle2,
   ChevronDown,
   CircleDashed,
@@ -34,7 +35,7 @@ import { api } from "@/lib/api/client";
 import { ResolutionCase } from "@/components/sentinel/resolution-case";
 import { ApprovalDecision, InvoiceCorrections } from "@/components/sentinel/invoice-actions";
 import { Evidence, FlightRecorder } from "@/components/sentinel/flight-recorder";
-import { findingAnchor, SentinelAnalysis, stages } from "@/components/sentinel/invoice-workspace";
+import { findingAnchor } from "@/components/sentinel/invoice-workspace";
 import { AnomalyPanel, CodingPanel } from "@/components/sentinel/ml-coding";
 import { DocumentPane, useDocumentLayout } from "@/components/sentinel/document-pane";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -98,24 +99,30 @@ function InvoicePage() {
   );
 }
 
-type View = "review" | "source" | "graph" | "connections";
-const VIEWS: Array<{ id: View; label: string; icon: typeof FileSearch }> = [
-  { id: "review", label: "Review", icon: ListChecks },
-  { id: "source", label: "Source document", icon: FileSearch },
-  { id: "graph", label: "Decision graph", icon: Network },
-  { id: "connections", label: "Connections", icon: Share2 },
-];
+type View = "document" | "case" | "coding" | "pay" | "history";
+const VIEW_IDS: View[] = ["document", "case", "coding", "pay", "history"];
+type HistoryView = "timeline" | "graph" | "connections";
 
 function InvoiceContent() {
   const { invoiceId } = Route.useParams();
   const { user } = useSession();
   const { data } = useSuspenseQuery(invoiceQuery(user.id, invoiceId));
-  const [view, setView] = useState<View>("review");
+  const [view, setViewState] = useState<View>("document");
+  const [historyView, setHistoryView] = useState<HistoryView>("timeline");
   const [focusKey, setFocusKey] = useState<string | null>(null);
+  // The open tab lives in the URL hash so it survives a demo-identity switch and can be linked.
   useEffect(() => {
     const h = window.location.hash.slice(1);
-    if (h === "graph" || h === "connections" || h === "source") setView(h);
+    if ((VIEW_IDS as string[]).includes(h)) setViewState(h as View);
+    if (h === "graph" || h === "connections") {
+      setViewState("history");
+      setHistoryView(h);
+    }
   }, []);
+  const setView = (v: View) => {
+    setViewState(v);
+    window.history.replaceState(null, "", `#${v}`);
+  };
   const fileName = data?.invoice.fileName ?? null;
   const layout = useDocumentLayout(invoiceId, data?.record.version ?? 0, !!data && !!fileName);
   const focus = useMemo(
@@ -123,10 +130,11 @@ function InvoiceContent() {
       focusKey,
       setFocusKey: (key: string | null) => {
         setFocusKey(key);
-        if (key && !window.matchMedia("(min-width: 1280px)").matches) setView("source");
+        if (key) setView("document");
       },
       available: new Set((layout.data?.anchors ?? []).map((a) => a.key)),
     }),
+
     [focusKey, layout.data],
   );
 
@@ -144,26 +152,63 @@ function InvoiceContent() {
 
   const record = data.record;
   const { action } = data;
-  const target =
-    action.kind === "approve"
-      ? "approval"
+  const target: View | null =
+    action.kind === "approve" ||
+    ["prepare_payment", "release_payment", "simulate_settlement"].includes(action.kind)
+      ? "pay"
       : ["review_bank_details", "resolve_issue"].includes(action.kind)
-        ? "resolution"
-        : ["prepare_payment", "release_payment", "simulate_settlement"].includes(action.kind)
-          ? "payment"
-          : null;
+        ? "case"
+        : null;
   const rawRefs = (id: string | undefined) =>
     record.validation_findings.find((f) => f.id === id)?.evidence_refs ?? [];
-  // Blocking issues first, then advisory, so the most important card is on top.
-  const ranked = [...data.invoice.findings].sort((a, b) => Number(b.blocking) - Number(a.blocking));
-  const issues = ranked.length;
   const covered = new Set(record.resolution_cases.flatMap((c) => c.finding_ids));
-  const goTo = (id: string) => {
-    setView("review");
-    requestAnimationFrame(() =>
-      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }),
-    );
-  };
+  const loose = [...data.invoice.findings]
+    .filter((f) => !f.id || !covered.has(f.id))
+    .sort((a, b) => Number(b.blocking) - Number(a.blocking));
+  const openCases = record.resolution_cases.filter(
+    (c) => !["RESOLVED", "REJECTED", "CANCELLED"].includes(c.state),
+  );
+  const hasCase =
+    record.resolution_cases.length > 0 ||
+    loose.length > 0 ||
+    record.duplicate_candidates.length > 0;
+  const blocking = data.invoice.findings.some((f) => f.blocking);
+  const needsCoding = record.line_items.filter(
+    (l) => l.gl_account && !["CONFIRMED", "OVERRIDDEN"].includes(l.coding_status ?? ""),
+  ).length;
+  const counts = { PASS: 0, FAIL: 0, UNKNOWN: 0 } as Record<string, number>;
+  for (const f of record.validation_findings) counts[f.result] = (counts[f.result] ?? 0) + 1;
+
+  const tabs: Array<{ id: View; label: string; icon: typeof FileSearch; badge?: ReactNode }> = [
+    { id: "document", label: "Document", icon: FileSearch },
+    ...(hasCase
+      ? [
+          {
+            id: "case" as const,
+            label: "Case",
+            icon: MessagesSquare,
+            badge: (
+              <span
+                className={`size-2 rounded-full ${blocking ? "bg-critical" : "bg-warning"}`}
+                aria-label={blocking ? "Blocks payment" : "Needs a look"}
+              />
+            ),
+          },
+        ]
+      : []),
+    {
+      id: "coding",
+      label: "GL coding",
+      icon: Brain,
+      badge: needsCoding ? (
+        <span className="figure rounded-full bg-secondary px-1.5 text-[10px] text-muted-foreground">
+          {needsCoding}
+        </span>
+      ) : undefined,
+    },
+    { id: "pay", label: "Approval & payment", icon: Wallet },
+    { id: "history", label: "History", icon: History },
+  ];
 
   return (
     <DocumentFocusContext.Provider value={focus}>
@@ -171,185 +216,183 @@ function InvoiceContent() {
         <ReviewHeader
           detail={data}
           actionTarget={target}
-          onAction={goTo}
-          stagesNav={<StageChips record={record} onGo={goTo} />}
+          onAction={(v) => setView(v as View)}
+          stagesNav={null}
         />
         <Tabs value={view} onValueChange={(v) => setView(v as View)}>
-          <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
-            {VIEWS.map((v) => (
+          <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-none border-b bg-transparent p-0">
+            {tabs.map((t) => (
               <TabsTrigger
-                key={v.id}
-                value={v.id}
-                className="gap-1.5 rounded-lg border border-transparent px-3 py-1.5 data-[state=active]:border-border data-[state=active]:bg-card data-[state=active]:shadow-card"
+                key={t.id}
+                value={t.id}
+                className="-mb-px gap-1.5 rounded-none border-b-2 border-transparent px-3 pb-2.5 pt-1.5 text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
               >
-                <v.icon className="size-4" aria-hidden /> {v.label}
+                <t.icon className="size-4" aria-hidden /> {t.label}
+                {t.badge}
               </TabsTrigger>
             ))}
           </TabsList>
 
-          <TabsContent value="review" className="mt-4">
-            <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,9fr)_minmax(0,11fr)]">
-              <aside
-                className="hidden xl:sticky xl:top-[10.5rem] xl:block"
-                aria-label="Original document"
-              >
-                <DocumentPane
-                  invoiceId={invoiceId}
-                  layout={layout.data}
-                  fileName={fileName}
-                  scanned={data.invoice.scanned}
-                  onOpenSource={() => setView("source")}
-                />
-              </aside>
-              <div className="min-w-0 space-y-6">
-                {/* 1 · Detect: summary and the one next action */}
-                <SentinelAnalysis
-                  record={record}
-                  findings={data.invoice.findings}
-                  plainStatus={data.plainStatus}
-                  actionLabel={action.label}
-                  actionTarget={target}
-                />
-
-                {/* 2 · Resolve: what needs attention, ranked */}
-                <section id="resolution" className="scroll-mt-36 space-y-3">
-                  <StageHeading
-                    n={2}
-                    title="Needs attention"
-                    note={
-                      issues
-                        ? "Blocking issues first. Each one explains why it matters and the safe way through."
-                        : "Issues Sentinel found and the safe way through them."
-                    }
-                  />
-                  {issues === 0 && record.resolution_cases.length === 0 && (
-                    <p className="surface px-5 py-4 text-sm text-muted-foreground">
-                      Nothing to resolve. All blocking checks passed.
-                    </p>
-                  )}
-                  {record.resolution_cases.map((item) => (
-                    <div key={item.id} className="space-y-2">
-                      {ranked
-                        .filter((f) => f.id && item.finding_ids.includes(f.id))
-                        .map((f) => (
-                          <div key={f.id} className="space-y-2">
-                            <FindingCard finding={f} refs={rawRefs(f.id)} invoiceId={invoiceId} />
-                            <DismissFinding record={record} findingId={f.id} />
-                          </div>
-                        ))}
-                      <ResolutionCase id={item.id} />
-                    </div>
-                  ))}
-                  {ranked
-                    .filter((f) => !f.id || !covered.has(f.id))
-                    .map((f) => (
-                      <div key={f.id ?? f.code} className="space-y-2">
-                        <FindingCard finding={f} refs={rawRefs(f.id)} invoiceId={invoiceId} />
-                        <DismissFinding record={record} findingId={f.id} />
-                      </div>
-                    ))}
-                  <DuplicateComparison record={record} />
-                </section>
-
-                {/* Machine learning, beside the decision it informs */}
-                <CodingPanel key={record.version} record={record} />
-                <AnomalyPanel anomaly={record.anomaly} />
-
-                <details className="surface group px-5 py-4">
-                  <summary className="flex cursor-pointer items-center justify-between text-sm font-semibold">
-                    All checks and record details
-                    <ChevronDown
-                      className="size-4 transition-transform group-open:rotate-180"
-                      aria-hidden
-                    />
-                  </summary>
-                  <div className="mt-3 space-y-4">
-                    <ChecksPanel detail={data} />
-                    <ExtractedDetails detail={data} />
-                  </div>
-                </details>
-
-                {/* 3 · Settle */}
-                <section id="settle" className="scroll-mt-36 space-y-3">
-                  <StageHeading
-                    n={3}
-                    title="Settle"
-                    note="Approvals by the right people, then an independent simulated release."
-                  />
-                  <div id="approval" className="scroll-mt-36 space-y-3">
-                    <ApprovalPanel detail={data} />
-                    {record.allowed_actions.some(
-                      (action) => action === "approve" || action === "reject",
-                    ) && (
-                      <div className="surface px-5 py-4">
-                        <ApprovalDecision key={record.version} invoice={record} />
-                      </div>
-                    )}
-                  </div>
-                  <PaymentWorkflow invoice={record} />
-                  <InvoiceCorrections key={record.version} invoice={record} />
-                </section>
-
-                {/* 4 · Explain */}
-                <section id="explain" className="scroll-mt-36 space-y-3">
-                  <StageHeading
-                    n={4}
-                    title="Explain"
-                    note="Every recorded step, who did it and the evidence behind it."
-                  />
-                  <FlightRecorder invoiceId={invoiceId} />
-                  <div className="flex flex-wrap items-center gap-4 text-sm">
-                    <button
-                      type="button"
-                      onClick={() => setView("graph")}
-                      className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline"
-                    >
-                      <Network className="size-4" aria-hidden /> See the same events as a decision
-                      graph
-                    </button>
-                    {record.vendor_id && (
-                      <Link
-                        className="font-medium text-primary hover:underline"
-                        to="/vendors"
-                        search={{ vendorId: record.vendor_id, q: "", status: "" }}
-                      >
-                        View supplier profile
-                      </Link>
-                    )}
-                  </div>
-                  <details className="surface px-5 py-4 text-sm">
-                    <summary className="cursor-pointer font-semibold">Version history</summary>
-                    <ul className="mt-2 space-y-2">
-                      {record.versions.map((version) => (
-                        <li key={version.version}>
-                          Version {version.version} · {version.reason} · {version.created_by} ·{" "}
-                          {formatDate(version.created_at)}
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                </section>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="source" className="mt-4">
+          {/* Document: what Sentinel read, linked to where it read it. */}
+          <TabsContent value="document" className="mt-5 space-y-4">
             <SourceReview
               invoiceId={invoiceId}
               record={record}
               fileName={fileName}
               scanned={data.invoice.scanned}
+              focusKey={focusKey}
             />
+            <details className="surface group px-5 py-3">
+              <summary className="flex cursor-pointer items-center justify-between gap-3 text-sm">
+                <span className="font-medium">
+                  Checks · {counts["PASS"] ?? 0} passed
+                  {(counts["FAIL"] ?? 0) > 0 && (
+                    <span className="text-critical-foreground"> · {counts["FAIL"]} failed</span>
+                  )}
+                  {(counts["UNKNOWN"] ?? 0) > 0 && (
+                    <span className="text-warning-foreground">
+                      {" "}
+                      · {counts["UNKNOWN"]} couldn't be confirmed
+                    </span>
+                  )}
+                </span>
+                <ChevronDown
+                  className="size-4 transition-transform group-open:rotate-180"
+                  aria-hidden
+                />
+              </summary>
+              <div className="mt-3 space-y-4">
+                <ChecksPanel detail={data} />
+                <ExtractedDetails detail={data} />
+              </div>
+            </details>
+            <InvoiceCorrections key={record.version} invoice={record} />
           </TabsContent>
-          <TabsContent value="graph" className="mt-4">
-            <Suspense fallback={<Skeleton className="h-[460px] rounded-xl" />}>
-              <DecisionGraph record={record} />
-            </Suspense>
+
+          {/* Case: the conversation and the checklist to get this invoice paid. */}
+          {hasCase && (
+            <TabsContent value="case" className="mt-5 space-y-5">
+              <div id="resolution" className="scroll-mt-36 space-y-8">
+                {openCases.length === 0 && record.resolution_cases.length > 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Every case on this invoice is closed. The history is below.
+                  </p>
+                )}
+                {record.resolution_cases.map((item) => (
+                  <ResolutionCase key={item.id} id={item.id} />
+                ))}
+              </div>
+              {loose.length > 0 && (
+                <section className="space-y-2" aria-labelledby="also-heading">
+                  <h3 id="also-heading" className="text-sm font-semibold">
+                    {record.resolution_cases.length ? "Also noticed" : "Sentinel noticed"}
+                  </h3>
+                  {loose.map((f) => (
+                    <div key={f.id ?? f.code} className="space-y-2">
+                      <FindingCard finding={f} refs={rawRefs(f.id)} invoiceId={invoiceId} />
+                      <DismissFinding record={record} findingId={f.id} />
+                    </div>
+                  ))}
+                </section>
+              )}
+              <DuplicateComparison record={record} />
+              {record.anomaly && (
+                <details className="surface group px-5 py-3">
+                  <summary className="flex cursor-pointer items-center justify-between text-sm font-medium">
+                    Review priority (a risk signal, not a fraud probability)
+                    <ChevronDown
+                      className="size-4 transition-transform group-open:rotate-180"
+                      aria-hidden
+                    />
+                  </summary>
+                  <div className="mt-3">
+                    <AnomalyPanel anomaly={record.anomaly} />
+                  </div>
+                </details>
+              )}
+            </TabsContent>
+          )}
+
+          <TabsContent value="coding" className="mt-5">
+            <CodingPanel key={record.version} record={record} />
           </TabsContent>
-          <TabsContent value="connections" className="mt-4">
-            <Suspense fallback={<Skeleton className="h-[460px] rounded-xl" />}>
-              <ConnectionsGraph record={record} />
-            </Suspense>
+
+          <TabsContent value="pay" className="mt-5 space-y-4">
+            <div id="approval" className="space-y-3">
+              <ApprovalPanel detail={data} />
+              {record.allowed_actions.some(
+                (action) => action === "approve" || action === "reject",
+              ) && (
+                <div className="surface px-5 py-4">
+                  <ApprovalDecision key={record.version} invoice={record} />
+                </div>
+              )}
+            </div>
+            <PaymentWorkflow invoice={record} />
+          </TabsContent>
+
+          <TabsContent value="history" className="mt-5 space-y-4">
+            <div
+              role="radiogroup"
+              aria-label="History view"
+              className="inline-flex rounded-lg border bg-card p-0.5 text-sm"
+            >
+              {(
+                [
+                  ["timeline", "Timeline"],
+                  ["graph", "Decision graph"],
+                  ["connections", "Connections"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={historyView === id}
+                  onClick={() => setHistoryView(id)}
+                  className={`rounded-md px-3 py-1 font-medium transition-colors ${
+                    historyView === id
+                      ? "bg-primary-soft text-accent-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {historyView === "timeline" && <FlightRecorder invoiceId={invoiceId} />}
+            {historyView === "graph" && (
+              <Suspense fallback={<Skeleton className="h-[460px] rounded-xl" />}>
+                <DecisionGraph record={record} />
+              </Suspense>
+            )}
+            {historyView === "connections" && (
+              <Suspense fallback={<Skeleton className="h-[460px] rounded-xl" />}>
+                <ConnectionsGraph record={record} />
+              </Suspense>
+            )}
+            <div className="flex flex-wrap items-center gap-4 text-sm">
+              {record.vendor_id && (
+                <Link
+                  className="font-medium text-primary hover:underline"
+                  to="/vendors"
+                  search={{ vendorId: record.vendor_id, q: "", status: "" }}
+                >
+                  View supplier profile
+                </Link>
+              )}
+            </div>
+            <details className="surface px-5 py-3 text-sm">
+              <summary className="cursor-pointer font-medium">Version history</summary>
+              <ul className="mt-2 space-y-2">
+                {record.versions.map((version) => (
+                  <li key={version.version}>
+                    Version {version.version} · {version.reason} · {version.created_by} ·{" "}
+                    {formatDate(version.created_at)}
+                  </li>
+                ))}
+              </ul>
+            </details>
           </TabsContent>
         </Tabs>
       </div>
@@ -387,36 +430,6 @@ function DismissFinding({
         <Field name="reason" label="Evidence-backed reason" />
       </WorkflowForm>
     </details>
-  );
-}
-
-/** Compact Detect → Resolve → Settle → Explain chips for the sticky header. */
-function StageChips({ record, onGo }: { record: InvoiceRecord; onGo: (id: string) => void }) {
-  const tone: Record<string, string> = {
-    done: "bg-success-soft text-success-foreground",
-    current: "bg-primary text-primary-foreground",
-    blocked: "bg-critical-soft text-critical-foreground",
-    locked: "bg-secondary text-muted-foreground",
-    skipped: "bg-secondary text-muted-foreground",
-  };
-  return (
-    <ol className="flex flex-wrap items-center gap-1" aria-label="Invoice progress">
-      {stages(record).map((st, i) => (
-        <li key={st.id} className="flex items-center gap-1">
-          {i > 0 && <span className="h-px w-3 bg-border-strong" aria-hidden />}
-          <button
-            type="button"
-            onClick={() => onGo(st.id === "detect" ? "detect" : st.id)}
-            title={st.note}
-            aria-current={st.state === "current" || st.state === "blocked" ? "step" : undefined}
-            className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-opacity hover:opacity-80 ${tone[st.state]}`}
-          >
-            {st.label}
-            <span className="sr-only"> · {st.note}</span>
-          </button>
-        </li>
-      ))}
-    </ol>
   );
 }
 
@@ -476,18 +489,6 @@ function DuplicateComparison({ record }: { record: InvoiceRecord }) {
         ))}
       </ul>
     </section>
-  );
-}
-
-function StageHeading({ n, title, note }: { n: number; title: string; note: string }) {
-  return (
-    <header className="pt-2">
-      <h2 className="text-base font-semibold tracking-tight">
-        <span className="text-muted-foreground">{n} · </span>
-        {title}
-      </h2>
-      <p className="text-xs text-muted-foreground">{note}</p>
-    </header>
   );
 }
 

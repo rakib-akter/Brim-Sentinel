@@ -1,13 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { CodingPanel } from "@/components/sentinel/ml-coding";
-import { SentinelAnalysis } from "@/components/sentinel/invoice-workspace";
 import { shortActionLabel } from "@/lib/api/presentation";
 import type { InvoiceDetail, LineOut } from "@/lib/api/schema";
 import { sortCases } from "@/lib/cases";
-import type { Finding } from "@/lib/domain/types";
 
 vi.mock("@/lib/session", () => ({ useSession: () => ({ user: { id: "U004" } }) }));
 
@@ -48,18 +46,6 @@ const record = (over: Partial<InvoiceDetail>) =>
     ...over,
   }) as unknown as InvoiceDetail;
 
-const f = (over: Partial<Finding>): Finding => ({
-  id: "F1",
-  code: "BANK_CHANGE_UNVERIFIED",
-  severity: "high",
-  blocking: true,
-  title: "Bank account changed and not yet verified",
-  whyItMatters: "Changed bank details are the most common way payments are stolen.",
-  whatHappensNext: "Call the supplier on a contact already on file.",
-  evidenceIds: [],
-  ...over,
-});
-
 describe("short case actions", () => {
   it("replaces the long 'Resolve: <issue>' label with one verb and keeps other labels", () => {
     expect(shortActionLabel("resolve_issue", "Resolve: Supplier is not in the vendor master")).toBe(
@@ -80,47 +66,6 @@ describe("investigations ordering", () => {
       { id: "high-old", severity: "high", created_at: "2026-11-02" },
     ]);
     expect(sorted.map((c) => c.id)).toEqual(["critical", "high-old", "high-new", "low"]);
-  });
-});
-
-describe("Sentinel analysis summary", () => {
-  it("counts issues, separates blocking from advisory and does not repeat each explanation", () => {
-    render(
-      <SentinelAnalysis
-        record={record({})}
-        findings={[
-          f({ id: "A", blocking: false, severity: "medium", title: "Price above usual" }),
-          f({}),
-        ]}
-        plainStatus="Payment paused"
-        actionLabel="Review bank details"
-        actionTarget="resolution"
-      />,
-    );
-    expect(screen.getByRole("heading", { name: "Sentinel found 2 issues" })).toBeTruthy();
-    const list = screen.getByRole("list", { name: "Issues found" });
-    const items = within(list).getAllByRole("button");
-    // Blocking issue is ranked first.
-    expect(items[0]?.textContent).toContain("Bank account changed");
-    expect(items[0]?.textContent).toContain("Blocks payment");
-    expect(items[1]?.textContent).toContain("Advisory");
-    // The full "why it matters" lives once, in the finding card, not in the summary.
-    expect(screen.queryByText(/most common way payments are stolen/)).toBeNull();
-    expect(screen.getByRole("link", { name: /Review bank details/ })).toBeTruthy();
-  });
-
-  it("says plainly when nothing blocks payment", () => {
-    render(
-      <SentinelAnalysis
-        record={record({})}
-        findings={[]}
-        plainStatus="Waiting for approval"
-        actionLabel="View approval progress"
-        actionTarget={null}
-      />,
-    );
-    expect(screen.getByRole("heading", { name: "Waiting for approval" })).toBeTruthy();
-    expect(screen.getByText("Every blocking check passed.")).toBeTruthy();
   });
 });
 

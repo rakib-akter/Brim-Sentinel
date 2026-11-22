@@ -213,11 +213,14 @@ export function SourceReview({
   record,
   fileName,
   scanned,
+  focusKey = null,
 }: {
   invoiceId: string;
   record: InvoiceRecord;
   fileName: string | null;
   scanned: boolean;
+  /** A region another part of the page asked to show (e.g. "Show on document" on a finding). */
+  focusKey?: string | null;
 }) {
   const { user } = useSession();
   const layout = useQuery({
@@ -253,6 +256,13 @@ export function SourceReview({
   const rowRefs = useRef(new Map<string, HTMLElement>());
   const boxRefs = useRef(new Map<string, HTMLElement>());
   const { src, error: pageError } = usePageImage(user.id, invoiceId, page, usable);
+
+  useEffect(() => {
+    const a = focusKey ? anchors.get(focusKey) : undefined;
+    if (!a || !focusKey) return;
+    setActive(focusKey);
+    if (typeof a.page === "number") setPage(a.page);
+  }, [focusKey, anchors]);
 
   const tourKeys = useMemo(() => TOUR.filter((k) => anchors.has(k)), [anchors]);
   const started = useRef(false);

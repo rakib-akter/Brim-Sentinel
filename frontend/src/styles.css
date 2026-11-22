@@ -341,6 +341,15 @@
   .fade-in {
     animation: soft-fade 360ms ease-out both;
   }
+  .typing-dots span {
+    animation: typing-dot 1.2s ease-in-out infinite;
+  }
+  .typing-dots span:nth-child(2) {
+    animation-delay: 150ms;
+  }
+  .typing-dots span:nth-child(3) {
+    animation-delay: 300ms;
+  }
   .expand-in {
     animation: rise-in 220ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
   }
@@ -490,4 +499,27 @@
   .collapsible-content[data-state="closed"] {
     animation: collapsible-up 180ms ease-in;
   }
+}
+
+@keyframes typing-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+.typing-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+.typing-dots span {
+  display: block;
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0.4;
 }

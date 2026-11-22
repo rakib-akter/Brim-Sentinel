@@ -177,6 +177,21 @@ export function plain(code: string | null | undefined): string {
   return STATUS[code.toUpperCase()] ?? sentence(code);
 }
 
+/**
+ * Rewrites internal codes inside a sentence from the backend into plain words, e.g.
+ * "via email_request (state PENDING_INDEPENDENT_VERIFICATION)" → "via email request (waiting for
+ * supplier verification)". Record IDs like BC-009 or IN-EM-019-1 are left alone.
+ */
+export function plainSentence(text: string): string {
+  return text
+    .replace(
+      /\(state ([A-Z]+(?:_[A-Z]+)+)\)/g,
+      (_, code: string) => `(${plain(code).toLowerCase()})`,
+    )
+    .replace(/\b[A-Z]{2,}(?:_[A-Z]+)+\b/g, (code) => plain(code).toLowerCase())
+    .replace(/\b[a-z]+(?:_[a-z]+)+\b/g, (code) => plain(code).toLowerCase());
+}
+
 /** "P02" → "Rule P02: over CAD 10,000 also needs the finance manager". */
 export function policyLabel(id: string): string {
   const text = POLICY[id];

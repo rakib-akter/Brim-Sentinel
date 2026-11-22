@@ -1,21 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Ban,
   CheckCircle2,
   ChevronDown,
-  CircleHelp,
-  Database,
-  FileSearch,
   Lightbulb,
   RotateCcw,
+  ShieldCheck,
   Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { api } from "@/lib/api/client";
 import type { InvestigationOut } from "@/lib/api/schema";
-import { lookupLabel, plain } from "@/lib/plain-language";
+import { lookupLabel, plain, plainSentence } from "@/lib/plain-language";
 import { useSession } from "@/lib/session";
 import { EvidenceDrawer } from "./evidence-drawer";
 import { errorMessage } from "./workflow-form";
@@ -51,30 +48,98 @@ const MODE_STYLE = {
   fallback: "bg-secondary text-foreground",
 } as const;
 
-const CANNOT = [
-  "Verify bank details",
-  "Approve the invoice",
-  "Release or schedule a payment",
-  "Lift or change the hold",
-];
+const CANNOT =
+  "It can read records and explain them. It can't verify bank details, approve, release a payment or lift the hold.";
 
 /** Slow-response threshold after which we say so plainly (no fake progress). */
 const SLOW_MS = 12_000;
 
+/* ------------------------------------------------------------------ message bubbles */
+
+type Speaker = "checks" | "ai" | "person";
+
+const AVATAR: Record<Speaker, string> = {
+  checks: "bg-secondary text-foreground",
+  ai: "bg-primary text-primary-foreground",
+  person: "bg-success-soft text-success-foreground",
+};
+const BUBBLE: Record<Speaker, string> = {
+  checks: "bg-secondary/70",
+  ai: "bg-primary-soft/60",
+  person: "border bg-card",
+};
+
+export function Message({
+  speaker,
+  name,
+  initials,
+  tag,
+  time,
+  children,
+}: {
+  speaker: Speaker;
+  name: string;
+  initials?: string;
+  tag?: ReactNode;
+  time?: string | null;
+  children: ReactNode;
+}) {
+  return (
+    <li className="flex items-start gap-3">
+      <span
+        className={`grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold ${AVATAR[speaker]}`}
+        aria-hidden
+      >
+        {speaker === "ai" ? (
+          <Sparkles className="size-4" />
+        ) : speaker === "checks" ? (
+          <ShieldCheck className="size-4" />
+        ) : (
+          initials
+        )}
+      </span>
+      <div className={`min-w-0 max-w-[46rem] flex-1 rounded-2xl px-4 py-3 ${BUBBLE[speaker]}`}>
+        <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+          {name}
+          {tag}
+        </p>
+        <div className="mt-1 space-y-2 text-sm leading-relaxed">{children}</div>
+        {time && <p className="mt-2 text-[11px] text-muted-foreground">{time}</p>}
+      </div>
+    </li>
+  );
+}
+
+export const clock = (iso: string | null | undefined) =>
+  iso
+    ? new Intl.DateTimeFormat("en-CA", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(new Date(iso.endsWith("Z") || iso.includes("+") ? iso : `${iso}Z`))
+    : null;
+
+/* ------------------------------------------------------------------ AI turn */
+
 /**
- * Investigation activity for a case. The backend returns one completed result, so while it runs
- * the panel shows a neutral indeterminate state; the lookups appear only after the backend reports
- * them. Proposals are only proposals: the hold is never changed here.
+ * Sentinel AI's part of the case thread. The backend returns one completed result, so while it runs
+ * the thread shows a plain "reading" bubble; the lookups appear only after the backend reports
+ * them. Suggestions are only suggestions: the hold is never changed here.
  */
-export function InvestigatePanel({ caseId, issue }: { caseId: string; issue?: string }) {
+export function SentinelAiTurn({ caseId }: { caseId: string }) {
   const { user } = useSession();
   const cache = useQueryClient();
   const [slow, setSlow] = useState(false);
+  const [finishedAt, setFinishedAt] = useState<string | null>(null);
   const run = useMutation({
     mutationFn: () => api.investigate(user.id, caseId),
     retry: false,
-    // New lookups are audit events, so refresh the payment journey and graph.
-    onSuccess: () => cache.invalidateQueries({ queryKey: ["flight", user.id] }),
+    onSuccess: () => {
+      setFinishedAt(new Date().toISOString());
+      // New lookups are audit events, so refresh the payment journey and graph.
+      return cache.invalidateQueries({ queryKey: ["flight", user.id] });
+    },
   });
   useEffect(() => {
     if (!run.isPending) return setSlow(false);
@@ -82,225 +147,177 @@ export function InvestigatePanel({ caseId, issue }: { caseId: string; issue?: st
     return () => window.clearTimeout(t);
   }, [run.isPending]);
   if (user.role === "requester") return null;
-  const mode = run.data ? investigationMode(run.data) : null;
-  const status = run.isPending
-    ? "Investigating"
-    : run.error
-      ? "Couldn't finish"
-      : run.data
-        ? run.data.complete
-          ? "Complete"
-          : "Partial result"
-        : "Not started";
+
   return (
-    <section
-      id={`investigation-${caseId}`}
-      className="scroll-mt-40 overflow-hidden rounded-xl border bg-gradient-to-b from-primary-soft/40 to-card"
-      aria-labelledby={`inv-${caseId}`}
-    >
-      <header className="flex flex-wrap items-center gap-3 px-4 py-3">
-        <span
-          className={`grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground ${
-            run.isPending ? "active-dot" : ""
-          }`}
-        >
-          <Sparkles className="size-4" aria-hidden />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h4 id={`inv-${caseId}`} className="text-sm font-semibold">
-            Investigation activity
-          </h4>
-          <p className="truncate text-xs text-muted-foreground">
-            {issue ? `${issue} · ` : ""}
-            <span aria-live="polite">{status}</span>
-          </p>
-        </div>
-        {mode && (
-          <span
-            className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${MODE_STYLE[mode.key]}`}
-            title={mode.detail}
-          >
-            {mode.label}
-          </span>
-        )}
-        <Button
-          size="sm"
-          variant={run.data ? "outline" : "default"}
-          onClick={() => run.mutate()}
-          disabled={run.isPending}
-        >
-          {run.data || run.error ? <RotateCcw aria-hidden /> : <FileSearch aria-hidden />}
-          {run.isPending ? "Investigating…" : run.data || run.error ? "Run again" : "Investigate"}
-        </Button>
-      </header>
-
-      {!run.data && !run.isPending && !run.error && (
-        <p className="border-t px-4 py-3 text-xs text-muted-foreground">
-          Sentinel reads the case evidence with read-only lookups and explains what it finds. It
-          cannot approve, verify, release or change the hold.
-        </p>
-      )}
-
+    <>
       {run.isPending && (
-        <div className="border-t px-4 py-3" role="status">
-          <div className="processing-bar h-1 rounded-full bg-primary/15" aria-hidden />
-          <p className="mt-2 text-xs text-muted-foreground">
-            Sentinel is reading the permitted evidence. The lookups it made will be listed when it
-            finishes.
-            {slow && " This is taking longer than usual; you can keep working and come back."}
+        <Message speaker="ai" name="Sentinel AI">
+          <p role="status" className="flex items-center gap-2 text-muted-foreground">
+            <span className="typing-dots" aria-hidden>
+              <span />
+              <span />
+              <span />
+            </span>
+            Reading the records this case is allowed to see…
           </p>
-        </div>
+          {slow && (
+            <p className="text-xs text-muted-foreground">
+              This is taking longer than usual. You can keep working and come back.
+            </p>
+          )}
+        </Message>
       )}
-
       {run.error && !run.isPending && (
-        <div role="alert" className="border-t px-4 py-3 text-sm">
-          <p className="font-medium text-critical-foreground">The investigation didn't finish.</p>
-          <p className="text-xs text-muted-foreground">
-            {errorMessage(run.error)} Nothing was changed on the case. Try again, or continue with
-            the steps below.
+        <Message speaker="ai" name="Sentinel AI">
+          <p role="alert">
+            I couldn't finish: {errorMessage(run.error)} Nothing on the case was changed.
           </p>
-        </div>
+        </Message>
       )}
-
-      {run.data && !run.isPending && <Findings key={run.submittedAt} out={run.data} />}
-    </section>
+      {run.data && !run.isPending && (
+        <AiAnswer key={run.submittedAt} out={run.data} time={clock(finishedAt)} />
+      )}
+      <li className="pl-12">
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-dashed px-4 py-3">
+          <Button
+            size="sm"
+            variant={run.data ? "outline" : "default"}
+            onClick={() => run.mutate()}
+            disabled={run.isPending}
+          >
+            {run.data || run.error ? <RotateCcw aria-hidden /> : <Sparkles aria-hidden />}
+            {run.isPending
+              ? "Investigating…"
+              : run.data || run.error
+                ? "Ask again"
+                : "Ask Sentinel AI to explain this case"}
+          </Button>
+          <p className="min-w-0 flex-1 text-xs text-muted-foreground">{CANNOT}</p>
+        </div>
+      </li>
+    </>
   );
 }
 
-function Findings({ out }: { out: InvestigationOut }) {
+function AiAnswer({ out, time }: { out: InvestigationOut; time: string | null }) {
   const [openRef, setOpenRef] = useState<string | null>(null);
   const cited = out.lookups.filter((l) => out.evidence.includes(String(l["ref"])));
   const evidence = cited.length ? cited : out.lookups;
   const open = out.lookups.find((l) => String(l["ref"]) === openRef);
   const mode = investigationMode(out);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => ref.current?.focus({ preventScroll: true }), []);
-  return (
-    <div
-      ref={ref}
-      tabIndex={-1}
-      className="fade-in space-y-4 border-t px-4 py-4 text-sm outline-none"
+  const tag = (
+    <span
+      className={`rounded-full px-2 py-px text-[10px] font-semibold ${MODE_STYLE[mode.key]}`}
+      title={mode.detail}
     >
-      <section>
-        <h5 className="eyebrow flex items-center gap-1.5">
-          <Lightbulb className="size-3.5" aria-hidden /> What I found
-        </h5>
-        <p className="mt-1.5 leading-relaxed">{out.summary}</p>
-        <p className="mt-1 text-[11px] text-muted-foreground">
-          {mode.detail}
-          {!out.complete && " Incomplete: the lookup budget ran out before every source was read."}
-        </p>
-      </section>
-
-      <section>
-        <h5 className="eyebrow flex items-center gap-1.5">
-          <Database className="size-3.5" aria-hidden /> Evidence checked
-        </h5>
-        {evidence.length ? (
-          <ul className="stagger mt-2 grid gap-2 sm:grid-cols-2">
-            {evidence.map((l) => {
-              const r = String(l["ref"]);
-              return (
-                <li key={r}>
-                  <button
-                    type="button"
-                    onClick={() => setOpenRef(r)}
-                    className="lift flex w-full items-start gap-2 rounded-lg border bg-card px-3 py-2 text-left"
-                  >
-                    <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-success" aria-hidden />
-                    <span className="min-w-0">
-                      <span className="block text-xs font-medium">{lookupLabel(r)}</span>
-                      <span className="block text-[11px] text-muted-foreground">
-                        {String(l["rows"])} {Number(l["rows"]) === 1 ? "record" : "records"}
-                        {out.evidence.includes(r) ? " · cited" : ""}
-                      </span>
-                    </span>
-                  </button>
+      {mode.label}
+    </span>
+  );
+  return (
+    <>
+      <div className="stagger contents">
+        <Message speaker="ai" name="Sentinel AI" tag={tag} time={time}>
+          {evidence.length ? (
+            <>
+              <p>
+                I read {evidence.length} source{evidence.length === 1 ? "" : "s"} for this case:
+              </p>
+              <ul className="flex flex-wrap gap-1.5">
+                {evidence.map((l) => {
+                  const r = String(l["ref"]);
+                  return (
+                    <li key={r}>
+                      <button
+                        type="button"
+                        onClick={() => setOpenRef(r)}
+                        className="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-xs font-medium transition-colors hover:border-primary/40 hover:text-primary"
+                      >
+                        <CheckCircle2 className="size-3.5 text-success" aria-hidden />
+                        {lookupLabel(r)}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          ) : (
+            <p>I wasn't given any records, so treat what follows as unsupported.</p>
+          )}
+        </Message>
+        <Message speaker="ai" name="Sentinel AI" tag={tag}>
+          <p>{plainSentence(out.summary)}</p>
+          {!out.complete && (
+            <p className="text-xs text-muted-foreground">
+              I ran out of lookups before reading every source, so this is partial.
+            </p>
+          )}
+        </Message>
+        {(out.proposed_actions.length > 0 || out.open_questions.length > 0) && (
+          <Message speaker="ai" name="Sentinel AI" tag={tag}>
+            {out.proposed_actions.length > 0 && (
+              <>
+                <p>What I'd suggest a person does next:</p>
+                <ul className="space-y-1">
+                  {out.proposed_actions.map((a) => (
+                    <li key={a} className="flex items-start gap-2 font-medium">
+                      <Lightbulb className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+                      {plain(a)}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {out.open_questions.length > 0 && (
+              <>
+                <p className="text-muted-foreground">Still unanswered:</p>
+                <ul className="list-disc pl-5 text-muted-foreground">
+                  {out.open_questions.map((q) => (
+                    <li key={q}>{q}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+            <p className="text-xs text-muted-foreground">
+              These are suggestions.{" "}
+              {out.case_state_unchanged ? "Nothing on the case was changed." : ""}
+            </p>
+          </Message>
+        )}
+      </div>
+      <li className="pl-12">
+        <Collapsible>
+          <CollapsibleTrigger className="group inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground">
+            How this answer was produced
+            <ChevronDown
+              className="size-3.5 transition-transform group-data-[state=open]:rotate-180"
+              aria-hidden
+            />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="collapsible-content">
+            <p className="mt-2 text-[11px] text-muted-foreground">{mode.detail}</p>
+            <ol className="mt-1 space-y-1 text-xs text-muted-foreground">
+              {out.lookups.map((l, i) => (
+                <li key={String(l["ref"])} className="flex flex-wrap gap-x-2">
+                  <span className="figure w-5 text-right">{i + 1}.</span>
+                  <code className="font-mono text-[11px] text-foreground">
+                    {String(l["tool"] ?? l["ref"])}
+                  </code>
+                  <span>· {l["over_budget"] ? "over budget" : "completed"}</span>
+                  <span>· {String(l["rows"])} rows</span>
                 </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            No evidence was returned. Treat this explanation as unsupported.
-          </p>
-        )}
-      </section>
-
-      <section>
-        <h5 className="eyebrow">Recommended next step</h5>
-        {out.proposed_actions.length ? (
-          <ul className="mt-1.5 space-y-1">
-            {out.proposed_actions.map((a) => (
-              <li key={a} className="flex items-center gap-2">
-                <span className="size-1.5 rounded-full bg-primary" aria-hidden />
-                {plain(a)}
-                <span className="rounded-full bg-secondary px-1.5 py-px text-[10px] text-muted-foreground">
-                  proposal · a person decides
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-1.5 text-xs text-muted-foreground">No step was proposed.</p>
-        )}
-        {out.open_questions.length > 0 && (
-          <div className="mt-2">
-            <p className="flex items-center gap-1 text-xs font-medium">
-              <CircleHelp className="size-3.5" aria-hidden /> Open questions
-            </p>
-            <ul className="mt-1 list-disc pl-5 text-xs text-muted-foreground">
-              {out.open_questions.map((q) => (
-                <li key={q}>{q}</li>
               ))}
-            </ul>
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-lg bg-secondary/60 px-3 py-2.5">
-        <h5 className="eyebrow flex items-center gap-1.5">
-          <Ban className="size-3.5" aria-hidden /> What Sentinel cannot do
-        </h5>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {CANNOT.join(" · ")}.{" "}
-          {out.case_state_unchanged ? "The case was not changed by this run." : ""}
-        </p>
-      </section>
-
-      <Collapsible>
-        <CollapsibleTrigger className="group inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground">
-          Investigation details
-          <ChevronDown
-            className="size-3.5 transition-transform group-data-[state=open]:rotate-180"
-            aria-hidden
-          />
-        </CollapsibleTrigger>
-        <CollapsibleContent className="collapsible-content">
-          <ol className="mt-2 space-y-1 text-xs text-muted-foreground">
-            {out.lookups.map((l, i) => (
-              <li key={String(l["ref"])} className="flex flex-wrap gap-x-2">
-                <span className="figure w-5 text-right">{i + 1}.</span>
-                <code className="font-mono text-[11px] text-foreground">
-                  {String(l["tool"] ?? l["ref"])}
-                </code>
-                <span>· {l["over_budget"] ? "over budget" : "completed"}</span>
-                <span>· {String(l["rows"])} rows</span>
-              </li>
-            ))}
-          </ol>
-          <p className="mt-2 text-[11px] text-muted-foreground">{out.proposals_status}</p>
-          {out.rejected_reason && (
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Why this mode: {friendlyReason(out.rejected_reason)}
-            </p>
-          )}
-          {out.model && (
-            <p className="mt-1 text-[11px] text-muted-foreground">Model: {out.model}</p>
-          )}
-        </CollapsibleContent>
-      </Collapsible>
-
+            </ol>
+            {out.rejected_reason && (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Why this mode: {friendlyReason(out.rejected_reason)}
+              </p>
+            )}
+            {out.model && (
+              <p className="mt-1 text-[11px] text-muted-foreground">Model: {out.model}</p>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+      </li>
       <EvidenceDrawer
         open={!!open}
         onOpenChange={(v) => !v && setOpenRef(null)}
@@ -337,7 +354,7 @@ function Findings({ out }: { out: InvestigationOut }) {
               : undefined
         }
       />
-    </div>
+    </>
   );
 }
 
