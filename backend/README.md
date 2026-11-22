@@ -72,6 +72,20 @@ Paper Trail (V024, invoice `IN-EM-024-1`) bills by EFT but accepts card:
 See `docs/` for `FINANCIAL_RULES.md`, `ACCEPTANCE_TESTS.md`, `IMPLEMENTATION_STATUS.md`, `API_CHANGELOG.md`,
 `MODELS_AND_EVALUATION.md`.
 
+## Approval rules and delegation (Settings)
+
+* **Editable rules** — `GET/PATCH /api/v1/settings/approval-policy`. The controller/admin (U002, U001) can
+  change the approval thresholds (P01–P04), the finance manager's release cap (P09/P10) and switch the
+  extra finance-manager step for new/pending (P05) and legal (P06) suppliers. Rules can only be made
+  **stricter** than each role's authority limit (e.g. a department manager can never approve alone above
+  CAD 10,000). P07, P11, P12, P13 are locked. Changes are versioned (409 on stale edits), require a reason,
+  are audited with before/after values, and re-route invoices nobody has approved yet.
+* **Away & delegation (P08)** — `POST /api/v1/users/{id}/away` with a delegate, `POST /api/v1/users/{id}/back`.
+  Approvers manage their own absence; the controller/admin can manage anyone's. Waiting approval steps move
+  to the delegate immediately and return when the approver is back; decided steps never change. Away
+  approvers cannot approve. All other rules still apply to the delegate (own limit, no self-approval,
+  one person per step).
+
 ## AI investigation agent (optional)
 
 On a resolution case, **Investigate** runs a bounded, read-only investigation. A deterministic pass

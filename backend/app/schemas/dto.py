@@ -612,3 +612,52 @@ class MethodChangeOut(BaseModel):
     row_version: int
     applies_to_current_version: bool
     allowed_actions: list[str]
+
+
+# ------------------------------------------------------------------ settings: approval policy, delegation
+class ApprovalPolicyValues(Strict):
+    """Editable approval policy. Amounts are CAD minor units (cents)."""
+    dept_manager_up_to_minor: int = Field(..., description="P01/P02: department manager approves alone up to this.")
+    controller_over_minor: int = Field(..., description="P03: controller approves too above this.")
+    cfo_over_minor: int = Field(..., description="P04: CFO approves too above this.")
+    fm_release_up_to_minor: int = Field(..., description="P09/P10: finance manager may release up to this.")
+    new_vendor_needs_fm: bool = Field(..., description="P05: new/pending suppliers need the finance manager.")
+    legal_vendor_needs_fm: bool = Field(..., description="P06: legal suppliers need the finance manager.")
+
+
+class ApprovalPolicyRule(BaseModel):
+    id: str
+    text: str
+    editable: Literal["threshold", "switch", "locked", "delegation"]
+
+
+class ApprovalPolicyOut(BaseModel):
+    version: int
+    values: ApprovalPolicyValues
+    defaults: ApprovalPolicyValues
+    maximums: dict[str, int]
+    minimum_minor: int
+    rules: list[ApprovalPolicyRule]
+    updated_by: str | None
+    updated_by_name: str | None = None
+    updated_at: dt.datetime | None
+    reason: str | None
+    can_edit: bool
+    rerouted_invoice_ids: list[str] = []
+    changed: dict[str, dict[str, Any]] = {}
+
+
+class ApprovalPolicyUpdate(Strict):
+    expected_version: int = Field(..., description="Policy version the client edited (409 if stale).")
+    values: ApprovalPolicyValues
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
+class AwayRequest(Strict):
+    delegate_user_id: str = Field(..., max_length=40)
+    note: str | None = Field(None, max_length=500)
+
+
+class DelegationOut(BaseModel):
+    user: UserOut
+    rerouted_invoice_ids: list[str]

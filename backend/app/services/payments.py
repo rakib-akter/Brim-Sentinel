@@ -26,6 +26,7 @@ from app.db.models import (
 )
 from app.services import approval_policy, audit, lifecycle as lc, pipeline
 from app.services.validation import OPEN_BANK_CHANGE_STATES
+from app.services import policy_settings
 
 
 def get_payment(session: Session, payment_id: str) -> Payment:
@@ -131,7 +132,7 @@ def prepare(session: Session, actor: User, inv: Invoice, *, expected_version: in
     users = pipeline.users_map(session)
     pmc = _active_change(session, inv)
     excluded = pipeline.release_exclusions(session, inv, v) | {actor.id}
-    rel = approval_policy.eligible_releasers(v.amount_cad_minor or 0, users, excluded)
+    rel = approval_policy.eligible_releasers(v.amount_cad_minor or 0, users, excluded, policy_settings.current(session))
     if not rel:
         raise Unprocessable("NO_ELIGIBLE_RELEASER", "Nobody independent of the approvers and preparer holds release "
                             "authority for this amount. Payment stays held.", {"policy_ids": ["P09", "P10", "P11"]})
@@ -145,7 +146,8 @@ def prepare(session: Session, actor: User, inv: Invoice, *, expected_version: in
     lc.transition(session, inv, lc.SCHEDULED, actor=actor, reason=f"simulated {route.method} payment scheduled")
     audit.record(session, actor=actor, action="payment.scheduled", object_type="payment", object_id=p.id,
                  object_version=v.version, invoice_id=inv.id, after="SCHEDULED",
-                 policy_ids=["P09"] if p.amount_cad_minor <= 100_000_00 else ["P10"],
+                 policy_ids=approval_policy.release_policy_ids(p.amount_cad_minor,
+                                                            policy_settings.current(session))[:1],
                  evidence=[{"type": "payment_route", "ref": route.id, "provenance": route.provenance}],
                  details={"simulation": True, "eligible_releasers": rel, "method": route.method,
                           "method_change_id": pmc.id if pmc else None})
@@ -199,8 +201,9 @@ def release(session: Session, actor: User, payment_id: str, *, idempotency_key: 
         blocked.append("Payment method differs from the invoice and no method change is authorized.")
     if blocked:
         raise Unprocessable("HOLDS_UNRESOLVED", "Release blocked; payment stays held.", {"blocked_reasons": blocked})
-    roles = approval_policy.release_authority_roles(p.amount_cad_minor)
-    policy = "P09" if p.amount_cad_minor <= 100_000_00 else "P10"
+    cfg = policy_settings.current(session)
+    roles = approval_policy.release_authority_roles(p.amount_cad_minor, cfg)
+    policy = approval_policy.release_policy_ids(p.amount_cad_minor, cfg)[0]
     if actor.role not in roles:
         raise Forbidden("RELEASE_LIMIT_EXCEEDED",
                         f"Role {actor.role} cannot release CAD {p.amount_cad_minor / 100:,.2f} ({policy}: {roles}).",

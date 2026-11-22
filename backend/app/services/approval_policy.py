@@ -6,10 +6,14 @@ Pure functions over plain user records, so every rule and edge case is unit-test
  3. One person fills at most one step per version; a delegated duplicate escalates to the controller.
  4. CFO step maps to the controller_admin titled "Chief Financial Officer"; fail closed if absent.
  5. Duplicate finance-manager steps (P02/P05/P06/P12) merge, keeping every triggering policy ID.
-Thresholds compare integer CAD minor units; "over" means strictly greater than."""
+Thresholds compare integer CAD minor units; "over" means strictly greater than.
+
+Thresholds are configurable by a controller/admin (PolicyConfig, persisted by policy_settings), but only
+in the stricter direction: a step can be required at a LOWER amount, never at a higher one than the
+person in that step is authorized for. The defaults are the dataset policy (approval_policies.csv)."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Protocol
 
 from app.core.money import CAD_10K, CAD_50K, CAD_100K, CAD_250K, CAD_500K
@@ -17,6 +21,54 @@ from app.core.money import CAD_10K, CAD_50K, CAD_100K, CAD_250K, CAD_500K
 CFO_TITLE = "Chief Financial Officer"
 STEP_ORDER = ["dept_manager", "finance_manager", "controller_admin", "cfo"]
 STEP_CEILING = {"dept_manager": CAD_10K, "finance_manager": CAD_50K, "controller_admin": CAD_250K, "cfo": CAD_500K}
+
+
+@dataclass(frozen=True)
+class PolicyConfig:
+    """Editable approval/release thresholds (CAD minor units) and rule switches."""
+    dept_manager_up_to_minor: int = CAD_10K   # P01: ≤ this → department manager only; above → P02 adds FM
+    controller_over_minor: int = CAD_50K      # P03: above this → controller step
+    cfo_over_minor: int = CAD_250K            # P04: above this → CFO step
+    fm_release_up_to_minor: int = CAD_100K    # P09/P10: finance manager may release up to this
+    new_vendor_needs_fm: bool = True          # P05
+    legal_vendor_needs_fm: bool = True        # P06
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+DEFAULT_POLICY = PolicyConfig()
+
+# The loosest each threshold may be: the authority limit of the role that would otherwise act alone.
+POLICY_MAXIMUMS = {
+    "dept_manager_up_to_minor": CAD_10K,   # department managers' approval limit
+    "controller_over_minor": CAD_50K,      # finance manager's approval limit
+    "cfo_over_minor": CAD_250K,            # controller's approval limit
+    "fm_release_up_to_minor": CAD_100K,    # finance manager's release authority (brief)
+}
+POLICY_MINIMUM_MINOR = 100_00  # CAD 100: thresholds below this would route every invoice to everyone
+
+
+def validate_policy(cfg: PolicyConfig) -> list[str]:
+    """Plain-language problems with a proposed policy; empty when it is acceptable."""
+    errors: list[str] = []
+    labels = {"dept_manager_up_to_minor": "Department manager approves alone up to",
+              "controller_over_minor": "Controller approval needed above",
+              "cfo_over_minor": "CFO approval needed above",
+              "fm_release_up_to_minor": "Finance manager can release up to"}
+    for key, ceiling in POLICY_MAXIMUMS.items():
+        value = getattr(cfg, key)
+        if not isinstance(value, int) or isinstance(value, bool):
+            errors.append(f"{labels[key]}: must be a whole amount in cents.")
+            continue
+        if value < POLICY_MINIMUM_MINOR:
+            errors.append(f"{labels[key]}: must be at least CAD {POLICY_MINIMUM_MINOR // 100:,}.")
+        if value > ceiling:
+            errors.append(f"{labels[key]}: can't be more than CAD {ceiling // 100:,}, the authority limit "
+                          f"of the role involved. Rules can be made stricter, not looser.")
+    if not cfg.dept_manager_up_to_minor <= cfg.controller_over_minor <= cfg.cfo_over_minor:
+        errors.append("Thresholds must increase: department manager ≤ controller ≤ CFO.")
+    return errors
 
 
 class UserLike(Protocol):
@@ -49,24 +101,26 @@ class ChainResult:
 
 
 def required_steps(amount_cad_minor: int, *, vendor_status: str | None, vendor_category: str | None,
-                   po_over_balance: bool) -> list[StepPlan]:
+                   po_over_balance: bool, cfg: PolicyConfig = DEFAULT_POLICY) -> list[StepPlan]:
     a = amount_cad_minor
-    dept_pols = ["P01"] if a <= CAD_10K else ["P02"] + (["P03"] if a > CAD_50K else []) + (["P04"] if a > CAD_250K else [])
+    dept_only, ctrl_over, cfo_over = cfg.dept_manager_up_to_minor, cfg.controller_over_minor, cfg.cfo_over_minor
+    dept_pols = (["P01"] if a <= dept_only
+                 else ["P02"] + (["P03"] if a > ctrl_over else []) + (["P04"] if a > cfo_over else []))
     fm_pols: list[str] = []
-    if a > CAD_10K:
+    if a > dept_only:
         fm_pols.append("P02")
-    if vendor_status in {"pending_review", "new"}:
+    if cfg.new_vendor_needs_fm and vendor_status in {"pending_review", "new"}:
         fm_pols.append("P05")
-    if (vendor_category or "").strip().lower() == "legal":
+    if cfg.legal_vendor_needs_fm and (vendor_category or "").strip().lower() == "legal":
         fm_pols.append("P06")
     if po_over_balance:
         fm_pols.append("P12")
     steps = [StepPlan("dept_manager", "dept_manager", dept_pols, STEP_CEILING["dept_manager"])]
     if fm_pols:  # merged: one finance-manager step listing every triggering rule
         steps.append(StepPlan("finance_manager", "finance_manager", fm_pols, STEP_CEILING["finance_manager"]))
-    if a > CAD_50K:
+    if a > ctrl_over:
         steps.append(StepPlan("controller_admin", "controller_admin", ["P03"], STEP_CEILING["controller_admin"]))
-    if a > CAD_250K:
+    if a > cfo_over:
         steps.append(StepPlan("cfo", "cfo (controller_admin titled CFO)", ["P04"], STEP_CEILING["cfo"]))
     return steps
 
@@ -93,11 +147,12 @@ def find_finance_manager(users: dict[str, UserLike]) -> UserLike | None:
 
 def build_chain(amount_cad_minor: int, *, dept_manager_id: str | None, requester_id: str | None,
                 vendor_status: str | None, vendor_category: str | None, po_over_balance: bool,
-                users: dict[str, UserLike], maker_id: str | None = None) -> ChainResult:
+                users: dict[str, UserLike], maker_id: str | None = None,
+                cfg: PolicyConfig = DEFAULT_POLICY) -> ChainResult:
     """`maker_id` is the person whose manual edit created this invoice version. Like the
     requester (P07) they may not approve it (maker-checker); their step escalates to their manager."""
     steps = required_steps(amount_cad_minor, vendor_status=vendor_status, vendor_category=vendor_category,
-                           po_over_balance=po_over_balance)
+                           po_over_balance=po_over_balance, cfg=cfg)
     blocking: list[dict] = []
     if amount_cad_minor > CAD_500K:
         blocking.append({"code": "NO_ELIGIBLE_APPROVER",
@@ -198,13 +253,19 @@ def build_chain(amount_cad_minor: int, *, dept_manager_id: str | None, requester
     return ChainResult(steps=steps, blocking_codes=blocking)
 
 
-def release_authority_roles(amount_cad_minor: int) -> list[str]:
-    """P09: ≤ CAD 100k finance_manager (or a non-approving higher authority); P10: > CAD 100k controller_admin."""
-    return ["finance_manager", "controller_admin"] if amount_cad_minor <= CAD_100K else ["controller_admin"]
+def release_authority_roles(amount_cad_minor: int, cfg: PolicyConfig = DEFAULT_POLICY) -> list[str]:
+    """P09: ≤ cap (default CAD 100k) finance_manager or a non-approving higher authority; P10: above → controller."""
+    return (["finance_manager", "controller_admin"] if amount_cad_minor <= cfg.fm_release_up_to_minor
+            else ["controller_admin"])
 
 
-def eligible_releasers(amount_cad_minor: int, users: dict[str, UserLike], excluded_ids: set[str]) -> list[str]:
-    roles = release_authority_roles(amount_cad_minor)
+def release_policy_ids(amount_cad_minor: int, cfg: PolicyConfig = DEFAULT_POLICY) -> list[str]:
+    return ["P09", "P11"] if amount_cad_minor <= cfg.fm_release_up_to_minor else ["P10", "P11"]
+
+
+def eligible_releasers(amount_cad_minor: int, users: dict[str, UserLike], excluded_ids: set[str],
+                       cfg: PolicyConfig = DEFAULT_POLICY) -> list[str]:
+    roles = release_authority_roles(amount_cad_minor, cfg)
     out = [u for u in users.values() if _active(u) and u.role in roles and u.id not in excluded_ids]
     out.sort(key=lambda u: (roles.index(u.role), u.id))
     return [u.id for u in out]

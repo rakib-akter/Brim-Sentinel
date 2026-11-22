@@ -232,6 +232,18 @@ class ApprovalPolicy(Base):
     notes: Mapped[str | None]
 
 
+class PolicySetting(Base):
+    """Editable approval policy (one row per policy name). Versioned for optimistic concurrency;
+    every change is also an audit event with before/after values."""
+    __tablename__ = "policy_settings"
+    id: Mapped[str] = mapped_column(String, primary_key=True)  # "approval"
+    values: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    updated_by: Mapped[str | None]
+    updated_at: Mapped[dt.datetime | None]
+    reason: Mapped[str | None] = mapped_column(Text)
+
+
 class CardTransaction(Base):
     __tablename__ = "card_transactions"
     id: Mapped[str] = mapped_column(String, primary_key=True)

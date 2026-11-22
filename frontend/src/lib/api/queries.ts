@@ -73,6 +73,9 @@ export const paymentsQuery = (actor: string, state: string) =>
 export const flightQuery = (actor: string, id: string) =>
   queryOptions({ queryKey: ["flight", actor, id], queryFn: () => api.flight(actor, id) });
 
+export const policyQuery = (actor: string) =>
+  queryOptions({ queryKey: ["policy", actor], queryFn: () => api.policy(actor) });
+
 export const vendorsQuery = (actor: string, q: string, status: string) =>
   queryOptions({
     queryKey: ["vendors", actor, q, status],

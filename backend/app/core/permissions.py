@@ -31,6 +31,9 @@ PERMISSIONS: dict[str, set[str]] = {
     "payment_method.request": {"ap_clerk", "finance_manager", "controller_admin"},
     "payment_method.authorize": {"finance_manager"},
     "vendor.onboard_request": {"ap_clerk", "finance_manager", "controller_admin"},
+    # Editing approval thresholds/switches and setting someone else's delegate are admin actions.
+    "policy.edit": {"controller_admin"},
+    "delegation.manage": {"controller_admin"},
     "audit.read_all": {"auditor", "controller_admin", "finance_manager"},
     "audit.export": {"auditor", "controller_admin"},
 }
