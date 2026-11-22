@@ -260,9 +260,7 @@ export function actionLabel(action: string): string {
 
 /** Where an evidence reference can be opened in the app, if anywhere. */
 export type EvidenceTarget =
-  | { kind: "invoice"; invoiceId: string }
-  | { kind: "vendor"; vendorId: string }
-  | null;
+  { kind: "invoice"; invoiceId: string } | { kind: "vendor"; vendorId: string } | null;
 
 const INVOICE_ID = /^(AP-\d+|IN-[A-Z0-9-]+)$/;
 const VENDOR_ID = /^V\d{3,}$/;

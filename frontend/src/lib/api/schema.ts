@@ -586,9 +586,7 @@ export interface VerificationRequest {
   expected_row_version?: number | null;
   trusted_contact_id?: string | null;
   method:
-    | "phone_callback_to_contact_on_file"
-    | "video_call_to_contact_on_file"
-    | "in_person_meeting";
+    "phone_callback_to_contact_on_file" | "video_call_to_contact_on_file" | "in_person_meeting";
   occurred_at: string;
   outcome: "CONFIRMED" | "DENIED";
   notes: string;

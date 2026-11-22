@@ -40,7 +40,8 @@ const F = {
     blocking: true,
     title: "Supplier is not in the vendor list",
     whyItMatters: "We have no record of this supplier, their bank details or a contract.",
-    whatHappensNext: "Start vendor onboarding. Payment stays paused until the supplier is approved.",
+    whatHappensNext:
+      "Start vendor onboarding. Payment stays paused until the supplier is approved.",
     evidenceIds: ev,
   }),
   pendingVendor: (ev: string[]): Finding => ({
@@ -59,7 +60,8 @@ const F = {
     title: "Possible duplicate supplier record",
     whyItMatters:
       "\u201cHarlow and Stern LLP\u201d looks like the existing supplier \u201cHarlow & Stern LLP\u201d. Duplicate records can lead to paying twice or paying the wrong account.",
-    whatHappensNext: "Confirm whether both records are the same supplier before this invoice can continue.",
+    whatHappensNext:
+      "Confirm whether both records are the same supplier before this invoice can continue.",
     evidenceIds: ev,
   }),
   dupCandidate: (ev: string[], other: string): Finding => ({
@@ -86,8 +88,10 @@ const F = {
     severity: "medium",
     blocking: false,
     title: "Fuel surcharge is higher than usual",
-    whyItMatters: "Fuel surcharge is 22.00% on this invoice versus a usual 9.84% for this supplier.",
-    whatHappensNext: "Compare against the contract's fuel cap and ask the supplier if it doesn't match.",
+    whyItMatters:
+      "Fuel surcharge is 22.00% on this invoice versus a usual 9.84% for this supplier.",
+    whatHappensNext:
+      "Compare against the contract's fuel cap and ask the supplier if it doesn't match.",
     evidenceIds: ev,
   }),
   lowConfidence: (ev: string[]): Finding => ({
@@ -470,8 +474,13 @@ export const SEED_INVOICES: Invoice[] = [
     lineItems: [line("Monthly rent — 410 Queen St, Units 3–5", 1, 16600.0)],
     findings: [],
     approvalChain: [
-      step(1, "dept_approver", ...PR, ["P01"], "approved", { actingFor: TB_NAME, note: "Tom Becker is on leave; Priya Raman acted as delegate (P08)." }),
-      step(2, "controller", ...ML, ["P02"], "approved", { note: "Escalated: the delegate already held the Finance Manager step, so this step moved up one level." }),
+      step(1, "dept_approver", ...PR, ["P01"], "approved", {
+        actingFor: TB_NAME,
+        note: "Tom Becker is on leave; Priya Raman acted as delegate (P08).",
+      }),
+      step(2, "controller", ...ML, ["P02"], "approved", {
+        note: "Escalated: the delegate already held the Finance Manager step, so this step moved up one level.",
+      }),
     ],
     scheduledFor: "2026-12-01",
     paymentMethod: "eft",
