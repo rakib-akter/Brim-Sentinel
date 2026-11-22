@@ -11,6 +11,8 @@ export default defineConfig({
     baseURL: frontend,
     actionTimeout: 10_000,
     trace: "retain-on-failure",
+    // The upload checklist paces itself for people; tests skip the pauses.
+    reducedMotion: "reduce",
     ...(process.env["BRIM_CHROMIUM_PATH"]
       ? { launchOptions: { executablePath: process.env["BRIM_CHROMIUM_PATH"] } }
       : {}),
