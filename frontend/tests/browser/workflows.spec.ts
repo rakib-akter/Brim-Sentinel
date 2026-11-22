@@ -94,7 +94,11 @@ test("intake creates one draft and reports an already received file", async ({ p
   );
   for (const label of ["1 draft created", "Invoices already in the inbox"]) {
     await page.goto("/invoices");
-    await page.getByRole("button", { name: "Upload invoice", exact: true }).click();
+    // The button only opens the dialog once the page has hydrated; retry the click until it does.
+    await expect(async () => {
+      await page.getByRole("button", { name: "Upload invoice", exact: true }).click();
+      await expect(page.getByLabel("Choose invoice files")).toBeAttached({ timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
     await page.getByLabel("Choose invoice files").setInputFiles(file);
     await page.getByRole("button", { name: "Upload 1", exact: true }).click();
     await expect(page.getByText(label, { exact: true })).toBeVisible();
