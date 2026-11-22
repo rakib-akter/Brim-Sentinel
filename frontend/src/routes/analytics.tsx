@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, XAxis, YAxis } from "recharts";
-import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, Clock3, FileText, Layers3, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, Clock3, FileText, Layers3, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { PageHeader } from "@/components/sentinel/page-header";
 import { QueryState } from "@/components/sentinel/query-state";
@@ -200,17 +200,6 @@ function Insight({ label, value, warning = false }: { label: string; value: stri
     <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${warning ? "bg-critical-soft text-critical-foreground" : "bg-primary-soft text-primary"}`}>{warning ? <ArrowUpRight className="size-4"/> : <ArrowDownRight className="size-4"/>}</span>
     <div><p className="text-[12px] font-semibold">{label}</p><p className="text-[11px] text-muted-foreground">{value}</p></div>
   </div>;
-}
-
-function StatTile({ label, value, title }: { label: string; value: string; title?: string }) {
-  return (
-    <div className="surface px-4 py-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="figure mt-1 text-2xl font-semibold tracking-tight" title={title}>
-        {value}
-      </p>
-    </div>
-  );
 }
 
 type Datum = { label: string; value: number; count: number; cad_minor: number };
