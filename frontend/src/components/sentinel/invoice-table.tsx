@@ -25,10 +25,10 @@ function IntakeFlag({ task }: { task: InvoiceTask }) {
 
 export function InvoiceTable({ tasks, caption }: { tasks: InvoiceTask[]; caption: string }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="max-h-[min(58vh,560px)] overflow-auto overscroll-contain" role="region" aria-label={caption} tabIndex={0}>
       <table className="w-full min-w-[860px] text-sm">
         <caption className="sr-only">{caption}</caption>
-        <thead>
+        <thead className="sticky top-0 z-10 bg-card shadow-[0_1px_0_0_var(--border)]">
           <tr className="border-b text-left text-xs text-muted-foreground">
             <th scope="col" className="px-5 py-2.5 font-medium">
               Supplier

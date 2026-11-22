@@ -66,7 +66,7 @@ function Payments() {
         {payments.data?.length === 0 && (
           <p className="p-5 text-sm text-muted-foreground">No payment records match this view.</p>
         )}
-        <ul className="divide-y">
+        <ul className="max-h-[min(58vh,560px)] divide-y overflow-y-auto overscroll-contain" role="region" aria-label="Simulated payment records" tabIndex={0}>
           {payments.data?.map((payment) => (
             <li
               key={payment.id}

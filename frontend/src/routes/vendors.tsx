@@ -148,7 +148,7 @@ function VendorDirectory() {
             body="Try another supplier name or clear your filters."
           />
         ) : (
-          <ul className="divide-y">
+          <ul className="max-h-[min(58vh,560px)] divide-y overflow-y-auto overscroll-contain" role="region" aria-label="Supplier directory" tabIndex={0}>
             {result.data.map((vendor) => (
               <li
                 key={vendor.id}

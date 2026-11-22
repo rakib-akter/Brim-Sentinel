@@ -158,7 +158,7 @@ function AuditEvents() {
                 No audit events match these filters.
               </p>
             )}
-            <ul className="divide-y">
+            <ul className="max-h-[min(58vh,560px)] divide-y overflow-y-auto overscroll-contain" role="region" aria-label="Audit events" tabIndex={0}>
               {events.data.items.map((event) => (
                 <li key={event.id} className="px-6 py-5 text-sm transition-colors hover:bg-secondary/30">
                   <p className="font-medium">

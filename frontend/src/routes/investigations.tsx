@@ -77,7 +77,7 @@ function Investigations() {
             No open cases. Sentinel opens one whenever a check pauses a payment.
           </p>
         )}
-        <ul className="divide-y">
+        <ul className="max-h-[min(58vh,560px)] divide-y overflow-y-auto overscroll-contain" role="region" aria-label="Investigation cases" tabIndex={0}>
           {items.map((item) => {
             const inv = byInvoice.get(item.invoice_id);
             const sev = SEVERITY_STYLE[item.severity] ?? SEVERITY_STYLE["low"]!;
