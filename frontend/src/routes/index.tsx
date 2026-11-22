@@ -26,6 +26,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/sentinel/empty-state";
 import { InvoiceTable } from "@/components/sentinel/invoice-table";
+import { GuidedDemo } from "@/components/sentinel/guided-demo";
 import { MetricCard } from "@/components/sentinel/metric-card";
 import { PageHeader } from "@/components/sentinel/page-header";
 import { TaskRow, TaskSection } from "@/components/sentinel/task-list";
@@ -116,7 +117,8 @@ function OverviewContent() {
 
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <GuidedDemo />
+      <div className="stagger grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Link to="/approvals">
           <MetricCard
             label="Ready for approval"
@@ -172,7 +174,7 @@ function OverviewContent() {
             }
           >
             {attention.length ? (
-              <ul className="divide-y">
+              <ul className="stagger divide-y">
                 {attention.map((t) => (
                   <TaskRow key={t.invoice.id} task={t} />
                 ))}
@@ -200,7 +202,7 @@ function OverviewContent() {
             count={data.readyForApproval.length}
           >
             {data.readyForApproval.length ? (
-              <ul className="divide-y">
+              <ul className="stagger divide-y">
                 {data.readyForApproval.map((t) => (
                   <TaskRow key={t.invoice.id} task={t} compact />
                 ))}
@@ -231,7 +233,7 @@ function OverviewContent() {
             }
           >
             {data.upcomingPayments.length ? (
-              <ul className="divide-y">
+              <ul className="stagger divide-y">
                 {data.upcomingPayments.map((t) => (
                   <TaskRow key={t.invoice.id} task={t} dateLabel="scheduled" compact />
                 ))}
@@ -251,7 +253,7 @@ function OverviewContent() {
       <section id="intake-items" className="surface overflow-hidden">
         <h2 className="border-b px-5 py-3 font-semibold">Intake work items</h2>
         {data.workItems.length ? (
-          <ul className="divide-y">
+          <ul className="stagger divide-y">
             {data.workItems.map((item) => (
               <li key={item.id} className="px-5 py-3 text-sm">
                 <p className="font-medium">{item.subject ?? plain(item.item_type)}</p>

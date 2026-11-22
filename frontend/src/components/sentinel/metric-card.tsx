@@ -1,3 +1,4 @@
+import { CountUp } from "./count-up";
 import type { LucideIcon } from "lucide-react";
 
 export function MetricCard({
@@ -20,15 +21,19 @@ export function MetricCard({
     info: "bg-info-soft text-info-foreground",
   }[tone];
   return (
-    <div className="surface flex items-center gap-4 px-4 py-3.5">
+    <div className="surface lift flex items-center gap-4 px-4 py-3.5">
       <div className={`grid size-9 shrink-0 place-items-center rounded-lg ${toneCls}`}>
         <Icon className="size-4" aria-hidden />
       </div>
       <div className="min-w-0">
         <p className="truncate text-xs font-medium text-muted-foreground">{label}</p>
-        <p className="figure text-xl font-semibold leading-tight tracking-tight">{value}</p>
+        <p className="figure text-xl font-semibold leading-tight tracking-tight">
+          {typeof value === "number" ? <CountUp value={value} /> : value}
+        </p>
       </div>
-      <p className="ml-auto hidden text-right text-[11px] leading-tight text-muted-foreground 2xl:block">{hint}</p>
+      <p className="ml-auto hidden text-right text-[11px] leading-tight text-muted-foreground 2xl:block">
+        {hint}
+      </p>
     </div>
   );
 }

@@ -261,3 +261,117 @@
     animation: shimmer-bar 1.6s ease-in-out infinite;
   }
 }
+
+/* ---------------------------------------------------------------------------------------------
+ * Motion. Short, quiet and purposeful: content eases in, lists cascade, interactive cards lift,
+ * jumps land with a brief highlight. Everything is switched off for prefers-reduced-motion.
+ * ------------------------------------------------------------------------------------------- */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes soft-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes target-glow {
+  0% {
+    box-shadow: 0 0 0 0 oklch(0.517 0.208 287.6 / 0.35);
+  }
+  100% {
+    box-shadow: 0 0 0 14px oklch(0.517 0.208 287.6 / 0);
+  }
+}
+@keyframes thinking {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@layer components {
+  html {
+    scroll-behavior: smooth;
+  }
+  .page-enter {
+    animation: rise-in 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .fade-in {
+    animation: soft-fade 360ms ease-out both;
+  }
+  .rise-in {
+    animation: rise-in 360ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .stagger > * {
+    animation: rise-in 360ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .stagger > *:nth-child(2) {
+    animation-delay: 40ms;
+  }
+  .stagger > *:nth-child(3) {
+    animation-delay: 80ms;
+  }
+  .stagger > *:nth-child(4) {
+    animation-delay: 120ms;
+  }
+  .stagger > *:nth-child(5) {
+    animation-delay: 160ms;
+  }
+  .stagger > *:nth-child(6) {
+    animation-delay: 200ms;
+  }
+  .stagger > *:nth-child(7) {
+    animation-delay: 240ms;
+  }
+  .stagger > *:nth-child(n + 8) {
+    animation-delay: 280ms;
+  }
+  .lift {
+    transition:
+      transform 160ms ease,
+      box-shadow 160ms ease,
+      border-color 160ms ease;
+  }
+  .lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px -12px oklch(0.3 0.05 280 / 0.25);
+  }
+  .thinking {
+    animation: thinking 1.2s ease-in-out infinite;
+  }
+  [id]:target {
+    scroll-margin-top: 5rem;
+    animation: target-glow 1s ease-out 1;
+    border-radius: 0.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+  .lift:hover {
+    transform: none;
+  }
+}

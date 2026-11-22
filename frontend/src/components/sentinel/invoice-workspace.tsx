@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
@@ -83,8 +83,29 @@ const STAGE_STYLE: Record<StageState, { icon: typeof Check; ring: string; text: 
 
 /** Detect → Resolve → Settle → Explain, derived from the backend lifecycle state. */
 export function ProgressRail({ record }: { record: InvoiceRecord }) {
+  const [inView, setInView] = useState<string | null>(null);
+  useEffect(() => {
+    // Highlight the stage whose section is on screen (scrollspy).
+    const ids = ["detect", "resolution", "settle", "explain"];
+    const els = ids.map((id) => document.getElementById(id)).filter((e): e is HTMLElement => !!e);
+    if (!els.length || typeof IntersectionObserver === "undefined") return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const top = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (top) setInView(top.target.id);
+      },
+      { rootMargin: "-30% 0px -55% 0px" },
+    );
+    els.forEach((e) => obs.observe(e));
+    return () => obs.disconnect();
+  }, []);
   return (
-    <nav aria-label="Invoice progress" className="surface px-3 py-2">
+    <nav
+      aria-label="Invoice progress"
+      className="surface sticky top-2 z-20 px-3 py-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/90"
+    >
       <ol className="grid grid-cols-2 gap-1 sm:grid-cols-4">
         {stages(record).map((st, i) => {
           const style = STAGE_STYLE[st.state];
@@ -93,7 +114,9 @@ export function ProgressRail({ record }: { record: InvoiceRecord }) {
               <a
                 href={`#${st.id}`}
                 aria-current={st.state === "current" || st.state === "blocked" ? "step" : undefined}
-                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 transition-colors hover:bg-secondary/70"
+                className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 transition-colors hover:bg-secondary/70 ${
+                  inView === st.id ? "bg-primary-soft/60 ring-1 ring-primary/30" : ""
+                }`}
               >
                 <span
                   className={`grid size-7 shrink-0 place-items-center rounded-full ${style.ring}`}
@@ -141,7 +164,7 @@ export function SentinelAnalysis({
   ).length;
   const tone = hold ? "border-l-critical" : advisory ? "border-l-warning" : "border-l-success";
   return (
-    <section id="detect" className={`surface scroll-mt-4 border-l-4 ${tone} px-5 py-4`}>
+    <section id="detect" className={`surface rise-in scroll-mt-4 border-l-4 ${tone} px-5 py-4`}>
       <p className="eyebrow">Sentinel analysis</p>
       <div className="mt-1 flex flex-wrap items-start gap-3">
         {hold ? (
@@ -283,7 +306,7 @@ export function CodingPanel({ record }: { record: InvoiceRecord }) {
       {record.line_items.length === 0 ? (
         <p className="mt-3 text-sm text-muted-foreground">No line items were read.</p>
       ) : (
-        <ol className="mt-3 space-y-3">
+        <ol className="stagger mt-3 space-y-3">
           {record.line_items.map((line) => (
             <CodingLine
               key={line.line_no}

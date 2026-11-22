@@ -381,10 +381,25 @@ function FindingCard({ finding, refs }: { finding: Finding; refs: unknown[] }) {
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Row({
+  label,
+  check,
+  children,
+}: {
+  label: string;
+  /** "ok" = read with confidence; "review" = missing or uncertain, a person must confirm. */
+  check?: "ok" | "review";
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-2">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        {check === "ok" && <CheckCircle2 className="size-3.5 text-success" aria-label="Read" />}
+        {check === "review" && (
+          <CircleHelp className="size-3.5 text-warning" aria-label="Needs a person" />
+        )}
+        {label}
+      </dt>
       <dd className="text-right text-sm">{children}</dd>
     </div>
   );
@@ -394,17 +409,28 @@ function ExtractedDetails({ detail }: { detail: InvoiceDetail }) {
   const inv = detail.invoice;
   const unknown = <span className="text-warning-foreground">Needs a person</span>;
   const record = detail.record;
+  const uncertain = new Set(record.uncertain_fields);
+  const check = (present: boolean, ...keys: string[]): "ok" | "review" =>
+    present && !keys.some((k) => uncertain.has(k)) ? "ok" : "review";
+  const read = [inv.number, inv.issueDate, inv.subtotalMinor, inv.totalMinor].filter(
+    (v) => v !== null && v !== undefined,
+  ).length;
   return (
-    <section className="surface px-5 py-4" aria-labelledby="extracted-heading">
+    <section className="surface rise-in px-5 py-4" aria-labelledby="extracted-heading">
       <h2 id="extracted-heading" className="text-sm font-semibold">
         Extracted details
       </h2>
+      <p className="text-xs text-muted-foreground">
+        {read} of 4 key fields read · ✓ means read from the document, ? means a person must confirm.
+      </p>
       <dl className="mt-2 divide-y">
-        <Row label="Supplier">{inv.supplierName}</Row>
-        <Row label="Invoice number">
+        <Row label="Supplier" check={check(!!inv.supplierName, "vendor", "vendor_name")}>
+          {inv.supplierName}
+        </Row>
+        <Row label="Invoice number" check={check(!!inv.number, "invoice_number")}>
           {inv.number ? <span className="figure">{inv.number}</span> : unknown}
         </Row>
-        <Row label="Issued">
+        <Row label="Issued" check={check(!!inv.issueDate, "invoice_date")}>
           {inv.issueDate ? (
             <span className="figure">
               {formatDate(inv.issueDate, { year: "numeric", month: "short", day: "numeric" })}
@@ -413,7 +439,7 @@ function ExtractedDetails({ detail }: { detail: InvoiceDetail }) {
             unknown
           )}
         </Row>
-        <Row label="Subtotal">
+        <Row label="Subtotal" check={check(inv.subtotalMinor !== null, "subtotal")}>
           {inv.subtotalMinor === null ? (
             unknown
           ) : (
@@ -425,7 +451,7 @@ function ExtractedDetails({ detail }: { detail: InvoiceDetail }) {
             <Money minor={t.amountMinor} currency={inv.currency} showCode={false} />
           </Row>
         ))}
-        <Row label="Total">
+        <Row label="Total" check={check(inv.totalMinor !== null, "total")}>
           {inv.totalMinor === null ? (
             unknown
           ) : (

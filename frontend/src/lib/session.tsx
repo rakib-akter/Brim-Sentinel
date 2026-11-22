@@ -26,7 +26,7 @@ interface SessionValue {
   user: User;
   users: User[];
   permissions: string[];
-  setUserId: (id: string) => void;
+  setUserId: (id: string, nextPath?: string) => void;
   identityError: string | undefined;
 }
 
@@ -49,10 +49,11 @@ export function SessionProvider({ actor, children }: { actor: string; children: 
         initials: "—",
       };
 
-  function setUserId(id: string) {
+  function setUserId(id: string, nextPath?: string) {
     if (id === actor || !users.some((candidate) => candidate.id === id)) return;
     document.cookie = `${COOKIE}=${id}; Path=/; SameSite=Lax; Max-Age=2592000`;
-    window.location.reload();
+    if (nextPath) window.location.assign(nextPath);
+    else window.location.reload();
   }
 
   return (

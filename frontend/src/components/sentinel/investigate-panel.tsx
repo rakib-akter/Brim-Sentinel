@@ -1,5 +1,6 @@
+import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Sparkles } from "lucide-react";
+import { Check, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api/client";
 import type { InvestigationOut } from "@/lib/api/schema";
@@ -43,8 +44,67 @@ export function InvestigatePanel({ caseId }: { caseId: string }) {
           {errorMessage(run.error)}
         </p>
       )}
-      {run.data && <Result out={run.data} />}
+      {run.isPending && <Thinking />}
+      {run.data && !run.isPending && <Steps key={run.submittedAt} out={run.data} />}
     </section>
+  );
+}
+
+const THINKING = [
+  "Reading the invoice and its check results",
+  "Looking up the supplier, bank changes and related records",
+  "Checking every figure against the evidence",
+];
+
+/** Shown while the request runs. Generic on purpose: the real steps appear once it finishes. */
+function Thinking() {
+  return (
+    <ul className="fade-in mt-3 space-y-1.5" role="status" aria-label="Sentinel is investigating">
+      {THINKING.map((t, i) => (
+        <li key={t} className="flex items-center gap-2 text-muted-foreground">
+          <Loader2 className="size-3.5 animate-spin text-primary" aria-hidden />
+          <span className="thinking" style={{ animationDelay: `${i * 200}ms` }}>
+            {t}…
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The lookups Sentinel actually made appear one by one, then the cited answer. */
+function Steps({ out }: { out: InvestigationOut }) {
+  const total = out.lookups.length;
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      setShown(total);
+      return;
+    }
+    if (shown >= total) return;
+    const t = window.setTimeout(() => setShown((n) => n + 1), 280);
+    return () => window.clearTimeout(t);
+  }, [shown, total]);
+  return (
+    <div className="mt-3 space-y-3">
+      <ol className="space-y-1" aria-label="Steps Sentinel took">
+        {out.lookups.slice(0, shown).map((l) => (
+          <li key={String(l["ref"])} className="rise-in flex items-center gap-2 text-xs">
+            <Check className="size-3.5 text-success" aria-hidden />
+            <span>{lookupLabel(String(l["ref"]))}</span>
+            <span className="text-muted-foreground">
+              · {String(l["rows"])} {Number(l["rows"]) === 1 ? "record" : "records"}
+            </span>
+          </li>
+        ))}
+      </ol>
+      {shown >= total && (
+        <div className="fade-in">
+          <Result out={out} />
+        </div>
+      )}
+    </div>
   );
 }
 
