@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Building2 } from "lucide-react";
+import { Building2, ShieldAlert, ShieldCheck } from "lucide-react";
 import { EmptyState } from "@/components/sentinel/empty-state";
 import { PageHeader } from "@/components/sentinel/page-header";
 import { QueryState } from "@/components/sentinel/query-state";
@@ -57,6 +57,7 @@ function VendorDirectory() {
         title="Vendors"
         description="Find supplier records, payment routes and bank-change history."
       />
+      {result.data && <div className="grid gap-3 sm:grid-cols-3"><VendorStat icon={Building2} label="Matching suppliers" value={result.data.length} note="Current directory results" /><VendorStat icon={ShieldCheck} label="Active suppliers" value={result.data.filter((v) => v.status === "active").length} note="Active vendor records" /><VendorStat icon={ShieldAlert} label="Bank changes under review" value={result.data.filter((v) => v.has_open_bank_change).length} note="Independent verification required" /></div>}
       {permissions.includes("vendor.onboard_request") && (
         <details className="surface space-y-4 px-5 py-4">
           <summary className="cursor-pointer font-medium">Request vendor onboarding</summary>
@@ -98,7 +99,7 @@ function VendorDirectory() {
       <section className="surface overflow-hidden">
         <form
           key={JSON.stringify([search.q, search.status])}
-          className="flex flex-wrap items-end gap-3 border-b px-5 py-4"
+          className="flex flex-wrap items-end gap-3 border-b border-border/80 px-6 py-5"
           onSubmit={(event) => {
             event.preventDefault();
             const fields = new FormData(event.currentTarget);
@@ -151,7 +152,7 @@ function VendorDirectory() {
             {result.data.map((vendor) => (
               <li
                 key={vendor.id}
-                className="flex flex-wrap items-center justify-between gap-2 px-5 py-4 text-sm"
+                className="flex flex-wrap items-center justify-between gap-2 px-6 py-5 text-sm transition-colors hover:bg-secondary/30"
               >
                 <div>
                   <Link
@@ -181,3 +182,5 @@ function VendorDirectory() {
     </div>
   );
 }
+
+function VendorStat({ icon: Icon, label, value, note }: { icon: typeof Building2; label: string; value: number; note: string }) { return <div className="surface flex items-start gap-3 p-5"><div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary"><Icon className="size-5" /></div><div><p className="text-xs text-muted-foreground">{label}</p><p className="figure mt-1 text-[27px] font-semibold tracking-tight">{value}</p><p className="text-[11px] text-muted-foreground">{note}</p></div></div>; }
