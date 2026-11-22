@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ShieldAlert, ShieldCheck, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Money } from "@/components/sentinel/money";
 import { PageHeader } from "@/components/sentinel/page-header";
@@ -49,9 +49,10 @@ function Investigations() {
         title="Investigations"
         description="Every open exception with its evidence and the safe path to pay. Most severe first."
       />
+      {cases.data && <div className="grid gap-3 sm:grid-cols-3"><CaseStat icon={ClipboardList} label="Visible cases" value={items.length} note={search.history ? "Including historical cases" : "Open investigations"} /><CaseStat icon={ShieldAlert} label="High severity" value={items.filter((item) => item.severity === "high").length} note="Prioritize for review" /><CaseStat icon={ShieldCheck} label="Linked invoices" value={new Set(items.map((item) => item.invoice_id)).size} note="Distinct invoice records" /></div>}
       {search.caseId && <ResolutionCase key={search.caseId} id={search.caseId} />}
       <section className="surface overflow-hidden" aria-labelledby="cases-heading">
-        <div className="flex items-center justify-between border-b px-5 py-3">
+        <div className="flex items-center justify-between border-b border-border/80 px-6 py-5">
           <h2 id="cases-heading" className="font-semibold">
             {search.history ? "All cases" : "Open cases"}
             {cases.data && (
@@ -84,7 +85,7 @@ function Investigations() {
             return (
               <li
                 key={item.id}
-                className={`relative flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 transition-colors hover:bg-secondary/60 ${selected ? "bg-primary-soft/40" : ""}`}
+                className={`relative flex flex-wrap items-center gap-x-4 gap-y-2 px-6 py-5 transition-colors hover:bg-secondary/35 ${selected ? "bg-primary-soft/40" : ""}`}
               >
                 <span
                   className={`absolute inset-y-3 left-0 w-[3px] rounded-r ${sev.rail}`}
@@ -140,3 +141,5 @@ function Investigations() {
     </div>
   );
 }
+
+function CaseStat({ icon: Icon, label, value, note }: { icon: typeof ClipboardList; label: string; value: number; note: string }) { return <div className="surface flex items-start gap-3 p-5"><div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary"><Icon className="size-5" /></div><div><p className="text-xs text-muted-foreground">{label}</p><p className="figure mt-1 text-[27px] font-semibold tracking-tight">{value}</p><p className="text-[11px] text-muted-foreground">{note}</p></div></div>; }

@@ -148,8 +148,8 @@ function InboxContent() {
                   className={cn(
                     "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:shadow-focus",
                     active
-                      ? "bg-primary-soft text-accent-foreground"
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                      ? "border-primary bg-primary-soft/50 text-primary"
+                      : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
                   )}
                 >
                   {STATUS_FILTER_LABELS[f]}
@@ -175,7 +175,7 @@ function InboxContent() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search supplier or invoice #"
-              className="h-9 pl-9"
+              className="h-10 rounded-md pl-9 text-[13px]"
             />
           </div>
         </div>

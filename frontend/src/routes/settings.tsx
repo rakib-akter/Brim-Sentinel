@@ -47,7 +47,7 @@ function SettingsPage() {
       <ApprovalRulesSection />
 
       <section className="surface overflow-hidden" aria-labelledby="identity-heading">
-        <header className="flex items-start gap-3 border-b bg-warning-soft px-5 py-4">
+        <header className="flex items-start gap-3 border-b border-border/80 bg-warning-soft/50 px-6 py-5">
           <FlaskConical className="mt-0.5 size-4 text-warning-foreground" aria-hidden />
           <div>
             <h2 id="identity-heading" className="text-sm font-semibold">
@@ -113,7 +113,7 @@ function SettingsPage() {
       </section>
 
       <section
-        className="surface flex items-start gap-3 px-5 py-4"
+        className="surface flex items-start gap-3 px-6 py-5"
         aria-labelledby="source-heading"
       >
         <Server className="mt-0.5 size-4 text-muted-foreground" aria-hidden />
