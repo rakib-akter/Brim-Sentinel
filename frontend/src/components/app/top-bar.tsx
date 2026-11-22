@@ -24,7 +24,7 @@ function GlobalSearch() {
     void navigate({ to: "/invoices", search: { q: q.trim() || undefined } });
   };
   return (
-    <form onSubmit={submit} role="search" className="relative w-full max-w-md">
+    <form onSubmit={submit} role="search" className="relative w-full max-w-[420px]">
       <Search
         className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
         aria-hidden
@@ -36,8 +36,8 @@ function GlobalSearch() {
         id="global-search"
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="Search supplier, invoice number or ID"
-        className="h-9 rounded-lg border-border bg-background pl-9 shadow-none"
+        placeholder="Search invoices or suppliers"
+        className="h-9 rounded-md border-border bg-background/80 pl-9 text-[13px] shadow-none"
       />
     </form>
   );
@@ -107,13 +107,13 @@ function IdentityMenu() {
 export function TopBar() {
   const { user } = useSession();
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b bg-card/85 px-4 backdrop-blur md:px-6">
+    <header className="sticky top-0 z-20 flex h-[68px] items-center gap-4 border-b border-border/80 bg-card/95 px-5 backdrop-blur-md md:px-9 xl:px-12">
       <SidebarTrigger className="-ml-1 text-muted-foreground" />
       <GlobalSearch />
       <div className="ml-auto flex items-center gap-2">
         <span className="hidden items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground lg:inline-flex">
           <span className="size-1.5 rounded-full bg-primary" aria-hidden />
-          Viewing as {ROLES[user.role].label}
+          Demo · {ROLES[user.role].label}
         </span>
         <IdentityMenu />
       </div>

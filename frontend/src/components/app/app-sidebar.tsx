@@ -49,17 +49,17 @@ interface NavItem {
 }
 
 const WORK: NavItem[] = [
-  { to: "/", label: "Overview", icon: LayoutDashboard },
-  { to: "/invoices", label: "Invoice Inbox", icon: FileText, badge: "attention" },
+  { to: "/", label: "Home", icon: LayoutDashboard },
+  { to: "/invoices", label: "Invoices", icon: FileText, badge: "attention" },
   { to: "/approvals", label: "Approvals", icon: CheckSquare, badge: "approvals" },
   { to: "/payments", label: "Payments", icon: Wallet },
   { to: "/vendors", label: "Vendors", icon: Building2 },
 ];
 
 const OVERSIGHT: NavItem[] = [
-  { to: "/investigations", label: "Investigations", icon: SearchCheck },
+  { to: "/investigations", label: "Cases", icon: SearchCheck },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
-  { to: "/audit", label: "Audit Trail", icon: History },
+  { to: "/audit", label: "Audit", icon: History },
 ];
 
 function NavList({ items, counts }: { items: NavItem[]; counts: Record<string, number> }) {
@@ -75,7 +75,7 @@ function NavList({ items, counts }: { items: NavItem[]; counts: Record<string, n
               asChild
               isActive={active}
               tooltip={item.label}
-              className="h-9 font-medium data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground"
+              className="h-10 rounded-md px-3 text-[13px] font-medium text-sidebar-foreground/80 hover:bg-secondary/70 hover:text-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:font-semibold data-[active=true]:text-sidebar-accent-foreground"
             >
               <Link to={item.to}>
                 <item.icon aria-hidden />
@@ -107,29 +107,29 @@ export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
-      <SidebarHeader className="px-3 pb-2 pt-4">
-        <Link to="/" className="flex items-center gap-2.5 rounded-lg px-1 py-1">
-          <BrandMark className="size-8 shrink-0" />
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar">
+      <SidebarHeader className="border-b border-sidebar-border px-4 pb-5 pt-6">
+        <Link to="/" className="flex items-center gap-3 rounded-lg px-1 py-1">
+          <BrandMark className="size-9 shrink-0" />
           <div className="min-w-0 leading-tight group-data-[collapsible=icon]:hidden">
-            <p className="text-[15px] font-semibold tracking-tight text-foreground">
+            <p className="text-[15px] font-semibold tracking-[-0.035em] text-foreground">
               Brim Sentinel
             </p>
             <p className="truncate text-[11px] text-muted-foreground">
-              Harborline Logistics · Demo
+              Harborline Logistics
             </p>
           </div>
         </Link>
       </SidebarHeader>
-      <SidebarContent className="px-1">
+      <SidebarContent className="px-2 pt-4">
         <SidebarGroup>
-          <SidebarGroupLabel className="eyebrow">Work</SidebarGroupLabel>
+          <SidebarGroupLabel className="eyebrow">Workspace</SidebarGroupLabel>
           <SidebarGroupContent>
             <NavList items={WORK} counts={counts} />
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
-          <SidebarGroupLabel className="eyebrow">Oversight</SidebarGroupLabel>
+          <SidebarGroupLabel className="eyebrow">Control & reporting</SidebarGroupLabel>
           <SidebarGroupContent>
             <NavList
               items={OVERSIGHT.filter(
@@ -140,14 +140,14 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="px-2 pb-3">
+      <SidebarFooter className="border-t border-sidebar-border px-3 pb-4 pt-3">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
               isActive={pathname.startsWith("/settings")}
               tooltip="Settings"
-              className="h-9 font-medium data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground"
+              className="h-10 rounded-md px-3 text-[13px] font-medium text-sidebar-foreground/80 hover:bg-secondary/70 hover:text-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:font-semibold data-[active=true]:text-sidebar-accent-foreground"
             >
               <Link to="/settings">
                 <Settings aria-hidden />

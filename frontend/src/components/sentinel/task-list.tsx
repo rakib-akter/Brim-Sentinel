@@ -35,25 +35,25 @@ export function TaskSection({
 }) {
   return (
     <section className="surface flex flex-col overflow-hidden" aria-labelledby={`${title}-heading`}>
-      <header className="flex items-start gap-3 border-b px-5 py-4">
-        <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary-soft text-primary">
+      <header className="flex items-center gap-3 border-b border-border/80 px-5 py-[18px] md:px-6">
+        <div className="grid size-7 shrink-0 place-items-center text-muted-foreground">
           <Icon className="size-4" aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
           <h2
             id={`${title}-heading`}
-            className="flex items-center gap-2 text-[15px] font-semibold tracking-tight"
+            className="flex items-center gap-2.5 text-[14px] font-semibold tracking-[-0.018em]"
           >
             {title}
-            <span className="figure rounded-full bg-secondary px-2 py-px text-xs font-medium text-muted-foreground">
+            <span className="figure rounded-md border border-border bg-secondary/60 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
               {count}
             </span>
           </h2>
-          <p className="text-xs text-muted-foreground">{description}</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{description}</p>
         </div>
       </header>
       <div className="flex-1">{children}</div>
-      {footer ? <div className="border-t px-5 py-2.5">{footer}</div> : null}
+      {footer ? <div className="border-t border-border/80 px-5 py-3 md:px-6">{footer}</div> : null}
     </section>
   );
 }
@@ -75,7 +75,7 @@ export function TaskRow({
       <Link
         to="/invoices/$invoiceId"
         params={{ invoiceId: inv.id }}
-        className="truncate text-sm font-medium text-foreground hover:underline"
+        className="truncate text-[13px] font-semibold tracking-[-0.01em] text-foreground underline-offset-4 hover:text-primary hover:underline"
       >
         {inv.supplierName}
       </Link>
@@ -86,7 +86,7 @@ export function TaskRow({
   );
   const status = (
     <p
-      className={`mt-0.5 line-clamp-2 text-[13px] ${STATUS_TEXT[inv.status] ?? "text-muted-foreground"}`}
+      className={`mt-0.5 line-clamp-2 text-[12px] leading-relaxed ${STATUS_TEXT[inv.status] ?? "text-muted-foreground"}`}
     >
       {task.plainStatus}
     </p>
@@ -94,9 +94,9 @@ export function TaskRow({
 
   if (compact) {
     return (
-      <li className="relative px-5 py-3.5 transition-colors hover:bg-secondary/60">
+      <li className="relative px-5 py-3.5 transition-colors hover:bg-secondary/35">
         <span
-          className={`absolute inset-y-3 left-0 w-[3px] rounded-r ${inv.risk ? RAIL[inv.risk] : "bg-border"}`}
+          className={`absolute inset-y-4 left-0 w-[2px] rounded-r ${inv.risk ? RAIL[inv.risk] : "bg-border"}`}
           aria-hidden
         />
         <div className="flex items-baseline justify-between gap-3">
@@ -104,7 +104,7 @@ export function TaskRow({
           <Money
             minor={inv.totalMinor}
             currency={inv.currency}
-            className="shrink-0 text-sm font-medium"
+            className="figure shrink-0 text-[13px] font-semibold tracking-tight"
           />
         </div>
         {status}
@@ -117,9 +117,9 @@ export function TaskRow({
   }
 
   return (
-    <li className="relative flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 transition-colors hover:bg-secondary/60">
+    <li className="relative flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 transition-colors hover:bg-secondary/35">
       <span
-        className={`absolute inset-y-3 left-0 w-[3px] rounded-r ${inv.risk ? RAIL[inv.risk] : "bg-border"}`}
+        className={`absolute inset-y-4 left-0 w-[2px] rounded-r ${inv.risk ? RAIL[inv.risk] : "bg-border"}`}
         aria-hidden
       />
       <div className="min-w-[14rem] flex-1">
@@ -131,7 +131,7 @@ export function TaskRow({
         <Money
           minor={inv.totalMinor}
           currency={inv.currency}
-          className="whitespace-nowrap text-sm font-medium"
+          className="figure whitespace-nowrap text-[13px] font-semibold tracking-tight"
         />
         <ActionButton task={task} />
       </div>

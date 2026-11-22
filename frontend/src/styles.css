@@ -79,26 +79,26 @@
 }
 
 :root {
-  --radius: 0.75rem;
+  --radius: 0.625rem;
 
   /* Surfaces & text */
-  --background: oklch(0.982 0.004 271.4);
-  --foreground: oklch(0.26 0.032 263.8);
+  --background: #f8f9fc;
+  --foreground: #1c2434;
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.26 0.032 263.8);
+  --card-foreground: #1c2434;
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.26 0.032 263.8);
 
   /* Violet — primary actions, navigation, active states */
-  --primary: oklch(0.517 0.208 287.6);
-  --primary-strong: oklch(0.45 0.2 287.6);
+  --primary: #6846d6;
+  --primary-strong: #5537ba;
   --primary-foreground: oklch(0.99 0.005 287);
-  --primary-soft: oklch(0.954 0.024 296.1);
+  --primary-soft: #f1edff;
 
   --secondary: oklch(0.965 0.006 274);
   --secondary-foreground: oklch(0.26 0.032 263.8);
   --muted: oklch(0.965 0.006 274);
-  --muted-foreground: oklch(0.554 0.041 257.4);
+  --muted-foreground: #687386;
   --accent: oklch(0.954 0.024 296.1);
   --accent-foreground: oklch(0.45 0.2 287.6);
 
@@ -120,8 +120,8 @@
   --destructive: oklch(0.577 0.215 27.3);
   --destructive-foreground: oklch(0.99 0 0);
 
-  --border: oklch(0.932 0.011 274.9);
-  --border-strong: oklch(0.88 0.015 274);
+  --border: #e8ebf2;
+  --border-strong: #d9deea;
   --input: oklch(0.91 0.012 274);
   --ring: oklch(0.517 0.208 287.6);
 
@@ -131,17 +131,17 @@
   --chart-4: oklch(0.596 0.127 163.2);
   --chart-5: oklch(0.666 0.157 58.3);
 
-  --sidebar: oklch(1 0 0);
+  --sidebar: #ffffff;
   --sidebar-foreground: oklch(0.38 0.03 262);
   --sidebar-primary: oklch(0.517 0.208 287.6);
   --sidebar-primary-foreground: oklch(0.99 0.005 287);
   --sidebar-accent: oklch(0.954 0.024 296.1);
   --sidebar-accent-foreground: oklch(0.45 0.2 287.6);
-  --sidebar-border: oklch(0.932 0.011 274.9);
+  --sidebar-border: #e8ebf2;
   --sidebar-ring: oklch(0.517 0.208 287.6);
 
   /* Elevation */
-  --shadow-card: 0 1px 2px oklch(0.26 0.032 263.8 / 0.04), 0 1px 3px oklch(0.26 0.032 263.8 / 0.04);
+  --shadow-card: 0 1px 2px rgb(23 30 52 / 0.025);
   --shadow-raised:
     0 12px 32px -12px oklch(0.26 0.032 263.8 / 0.14), 0 2px 6px oklch(0.26 0.032 263.8 / 0.05);
   --shadow-focus: 0 0 0 3px oklch(0.517 0.208 287.6 / 0.22);
@@ -227,7 +227,7 @@
   font-size: 0.6875rem;
   line-height: 1rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.095em;
   text-transform: uppercase;
   color: var(--color-muted-foreground);
 }
@@ -235,7 +235,7 @@
 @utility surface {
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius);
   box-shadow: var(--shadow-card);
 }
 
