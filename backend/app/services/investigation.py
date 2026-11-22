@@ -199,7 +199,8 @@ def _deterministic(r: Runner) -> dict[str, Any]:
             evidence.append(r.calls[-1]["ref"])
             for b in bcs:
                 if b["verified_by_callback"] == "no":
-                    lines.append(f"Bank change {b['change_id']} on {b['requested_at']} came by {b['channel']} and is "
+                    channel = str(b["channel"] or "an unknown channel").replace("_", " ")
+                    lines.append(f"Bank change {b['change_id']} on {b['requested_at']} came by {channel} and is "
                                  f"not verified by callback ({b['old_account']} → {b['new_account']}).")
                     if b["requested_at"] == head["invoice_date"]:
                         lines.append(f"The invoice is dated the same day as the change ({b['requested_at']}).")
@@ -272,6 +273,8 @@ def investigate(s: Session, actor: User, case: ResolutionCase, *, max_calls: int
            "case_state_unchanged": True,
            "proposals_status": "PROPOSED — a person must accept; nothing was executed.",
            "model": r.model if source == "model" else None,
+           "replayed": (all(bool(m.get("cached")) for m in model_calls) if source == "model" and model_calls
+                        else None),
            "ai_cost_usd": round(sum(float(m.get("cost_usd") or 0) for m in model_calls), 6) if model_calls else None}
     audit.record(s, actor=actor, action="investigation.completed", object_type="case", object_id=case.id,
                  invoice_id=case.invoice_id, result="INFO",

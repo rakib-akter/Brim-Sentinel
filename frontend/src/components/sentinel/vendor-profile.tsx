@@ -81,7 +81,7 @@ function Profile({ vendor }: { vendor: VendorDetail }) {
           <ul className="space-y-1">
             {vendor.routes.map((route) => (
               <li key={route.id}>
-                {route.method} · {humanize(route.status)}
+                {humanize(route.method)} · {humanize(route.status)}
                 {route.account_masked && ` · ${route.account_masked}`}
               </li>
             ))}

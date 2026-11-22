@@ -72,7 +72,7 @@ test("Detect → Resolve → Settle → Explain using seeded FastAPI records", a
   await page.getByRole("button", { name: "Release simulated payment" }).click();
   await page.getByLabel("Outcome", { exact: true }).selectOption("SETTLED");
   await page.getByRole("button", { name: "Record simulated settlement" }).click();
-  await expect(page.locator("#payment").getByText(/settled · EFT/i)).toBeVisible();
+  await expect(page.locator("#payment").getByText(/Paid \(simulated\) · EFT/i)).toBeVisible();
   await expect(page.locator("#payment")).toContainText("Released by U003");
 
   await switchActor(page, "Elise Tremblay", "Hannah Lindqvist");

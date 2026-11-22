@@ -15,7 +15,7 @@ def test_at25_cascadia_cites_bc009_and_same_day(client):
     r = client.post(f"/api/v1/cases/{c['id']}/investigate", headers=H("U004"))
     assert r.status_code == 200, r.text
     out = r.json()
-    assert "BC-009" in out["summary"] and "email_request" in out["summary"]
+    assert "BC-009" in out["summary"] and "email request" in out["summary"]
     assert "same day" in out["summary"] and "2026-10-27" in out["summary"]
     assert out["evidence"] and all(e in {x["ref"] for x in out["lookups"]} for e in out["evidence"])
     assert out["source"] == "deterministic_template"  # AT-30: AI off → deterministic, case still works

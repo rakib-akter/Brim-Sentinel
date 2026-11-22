@@ -3,6 +3,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { flightQuery } from "@/lib/api/queries";
 import { useSession } from "@/lib/session";
 import { formatDate } from "@/lib/format";
+import { evidenceLabel, isNotableResult, plain, policyLabel } from "@/lib/plain-language";
 import { errorMessage } from "./workflow-form";
 
 export function Evidence({ items }: { items: unknown[] }) {
@@ -10,8 +11,9 @@ export function Evidence({ items }: { items: unknown[] }) {
   return (
     <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
       {items.map((item, i) => (
-        <li key={i} className="break-all">
-          {typeof item === "string" ? item : JSON.stringify(item)}
+        <li key={i} className="flex gap-1.5">
+          <span aria-hidden>•</span>
+          <span>{evidenceLabel(item)}</span>
         </li>
       ))}
     </ul>
@@ -39,15 +41,21 @@ export function FlightRecorder({ invoiceId }: { invoiceId: string }) {
                   <p className="font-medium">{event.label}</p>
                   <p className="text-muted-foreground">
                     {event.actor_name ?? event.actor_id ?? "System"} ·{" "}
-                    {formatDate(event.occurred_at, { dateStyle: "medium", timeStyle: "short" })} ·{" "}
-                    {event.result}
+                    {formatDate(event.occurred_at, { dateStyle: "medium", timeStyle: "short" })}
+                    {isNotableResult(event.result) && <> · {plain(event.result)}</>}
                   </p>
                   {event.before_state && event.after_state && (
                     <p>
-                      {event.before_state} → {event.after_state}
+                      {plain(event.before_state)} → {plain(event.after_state)}
                     </p>
                   )}
-                  {event.policy_ids.length > 0 && <p>Policy {event.policy_ids.join(", ")}</p>}
+                  {event.policy_ids.length > 0 && (
+                    <ul className="text-xs text-muted-foreground">
+                      {event.policy_ids.map((id) => (
+                        <li key={id}>{policyLabel(id)}</li>
+                      ))}
+                    </ul>
+                  )}
                   {event.evidence_refs.length > 0 && (
                     <details>
                       <summary className="cursor-pointer text-primary">See evidence</summary>

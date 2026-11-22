@@ -5,13 +5,16 @@ import { caseQuery } from "@/lib/api/queries";
 import type { CaseDetail } from "@/lib/api/schema";
 import { useSession } from "@/lib/session";
 import { BankAuthorizationForm, BankVerificationForm } from "./bank-change-forms";
+import { describeData, plain } from "@/lib/plain-language";
 import { Evidence } from "./flight-recorder";
 import { InvestigatePanel } from "./investigate-panel";
 import { Choice, errorMessage, Field, humanize, value, WorkflowForm } from "./workflow-form";
 
 export function ResolutionCase({ id }: { id: string }) {
-  const { user, permissions } = useSession();
+  const { user, users, permissions } = useSession();
   const { data, error } = useQuery(caseQuery(user.id, id));
+  const nameOf = (actorId: string | null | undefined) =>
+    actorId ? (users.find((u) => u.id === actorId)?.name ?? "Sentinel") : "Sentinel";
   if (error)
     return (
       <p role="alert" className="text-sm text-critical-foreground">
@@ -29,7 +32,8 @@ export function ResolutionCase({ id }: { id: string }) {
       <div>
         <h3 className="font-semibold">{data.title}</h3>
         <p className="text-sm text-muted-foreground">
-          {humanize(data.state)} · {data.owner_id ?? humanize(data.owner_role)} ·{" "}
+          {humanize(data.state)} · Owner:{" "}
+          {data.owner_id ? nameOf(data.owner_id) : humanize(data.owner_role)} · Invoice{" "}
           <Link
             className="text-primary hover:underline"
             to="/invoices/$invoiceId"
@@ -76,9 +80,15 @@ export function ResolutionCase({ id }: { id: string }) {
         {data.actions.map((action) => (
           <div key={action.id} className="mt-2">
             <p>
-              {humanize(action.action_type)} · {action.status} · {action.actor_id} · {action.notes}
+              <span className="font-medium">{plain(action.action_type)}</span> ·{" "}
+              {plain(action.status)} · {nameOf(action.actor_id)}
             </p>
-            <Evidence items={Object.keys(action.data).length ? [action.data] : []} />
+            {action.notes && <p className="text-muted-foreground">{action.notes}</p>}
+            <ul className="text-xs text-muted-foreground">
+              {describeData(action.data).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
           </div>
         ))}
       </details>
@@ -193,12 +203,12 @@ function BankWizard({ data }: { data: CaseDetail }) {
         {bank && (
           <p>
             Requested change {bank.id} · {bank.old_account_masked ?? "Unknown"} →{" "}
-            {bank.new_account_masked ?? "Unknown"} · {bank.request_channel.replaceAll("_", " ")}
+            {bank.new_account_masked ?? "Unknown"} · {plain(bank.request_channel)}
           </p>
         )}
         {bank?.verification_outcome && (
           <p>
-            Callback outcome {bank.verification_outcome} · {bank.verification_evidence_ref}
+            Callback outcome: {plain(bank.verification_outcome)} · {bank.verification_evidence_ref}
           </p>
         )}
         {wizard.failure_states

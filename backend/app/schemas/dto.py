@@ -451,6 +451,7 @@ class InvestigationOut(BaseModel):
     proposals_status: str
     model: str | None = None
     ai_cost_usd: float | None = None
+    replayed: bool | None = Field(None, description="True when the model answer was replayed from a recording.")
 
 
 # ------------------------------------------------------------------ requests

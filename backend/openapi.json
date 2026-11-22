@@ -7603,6 +7603,18 @@
               }
             ],
             "title": "Ai Cost Usd"
+          },
+          "replayed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replayed",
+            "description": "True when the model answer was replayed from a recording."
           }
         },
         "type": "object",

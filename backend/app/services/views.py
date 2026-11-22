@@ -552,10 +552,10 @@ def flight_recorder(ctx: Ctx, inv: Invoice) -> dto.FlightRecorderOut:
         if e.action == "investigation.lookup":
             who = "Sentinel AI" if (e.details or {}).get("chosen_by") == "model" else "Sentinel"
             label = f"{who} looked up {(e.details or {}).get('tool', 'evidence')} (read-only)"
-        if e.action in {"invoice.transition", "bank_change.transition"}:
-            label = f"{label}: {e.before_state} → {e.after_state}"
+        # Before/after states are sent separately and shown in plain words by the UI.
         if e.result == "DENIED":
-            label = f"Blocked attempt: {e.details.get('code', e.action)} — {e.details.get('message', '')}".strip()
+            msg = (e.details or {}).get("message") or "the action was not permitted"
+            label = f"Blocked attempt — {msg}"
         events.append(dto.FlightEvent(kind="persisted", id=str(e.id), occurred_at=e.occurred_at, actor_id=e.actor_id,
                                       actor_name=ctx.name(e.actor_id) if e.actor_id else "Sentinel (system)",
                                       action=e.action, label=label, before_state=e.before_state,
