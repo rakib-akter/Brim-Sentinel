@@ -88,6 +88,10 @@ export function createHttpApi(baseUrl: string) {
     invoice: (actor: string, id: string) => get<Schema.InvoiceDetail>(actor, invoicePath(id)),
     document: async (actor: string, id: string) =>
       (await request(actor, invoicePath(id) + "/document")).blob(),
+    documentLayout: (actor: string, id: string) =>
+      get<Schema.DocumentLayoutOut>(actor, invoicePath(id) + "/document/layout"),
+    documentPage: async (actor: string, id: string, page: number) =>
+      (await request(actor, invoicePath(id) + `/document/pages/${page}`)).blob(),
     flight: (actor: string, id: string) =>
       get<Schema.FlightRecorderOut>(actor, invoicePath(id) + "/flight-recorder"),
     async upload(actor: string, file: File): Promise<Schema.UploadOut> {

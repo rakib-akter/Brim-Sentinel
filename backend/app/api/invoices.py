@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -12,9 +12,9 @@ from app.api.deps import get_actor, get_db
 from app.core.config import get_settings
 from app.core.errors import NotFound
 from app.core.permissions import require
-from app.db.models import Document, Invoice, User
+from app.db.models import Document, Invoice, InvoiceLine, User
 from app.schemas import dto
-from app.services import approvals, card_routes, intake, invoices as inv_svc, pipeline, views
+from app.services import approvals, card_routes, doc_layout, intake, invoices as inv_svc, pipeline, views
 
 router = APIRouter(prefix="/api/v1/invoices", tags=["invoices"], responses=ERRORS)
 
@@ -88,6 +88,39 @@ def get_document(invoice_id: str, actor: User = Depends(get_actor), db: Session 
     if doc is None or not Path(doc.storage_path).exists():
         raise NotFound("DOCUMENT_NOT_FOUND", "No source document for this invoice.")
     return FileResponse(doc.storage_path, media_type=doc.mime_type, filename=doc.filename)
+
+
+def _document_path(db: Session, actor: User, invoice_id: str) -> tuple[Invoice, Path]:
+    _ctx, inv = visible_invoice(db, actor, invoice_id)
+    doc = db.get(Document, inv.document_id) if inv.document_id else None
+    if doc is None or not Path(doc.storage_path).exists():
+        raise NotFound("DOCUMENT_NOT_FOUND", "No source document for this invoice.")
+    return inv, Path(doc.storage_path)
+
+
+@router.get("/{invoice_id}/document/layout", response_model=dto.DocumentLayoutOut)
+def document_layout(invoice_id: str, actor: User = Depends(get_actor),
+                    db: Session = Depends(get_db)) -> dto.DocumentLayoutOut:
+    """Where each extracted value sits on the original pages (boxes in page units)."""
+    inv, path = _document_path(db, actor, invoice_id)
+    v = pipeline.current_version(db, inv)
+    lines = list(db.scalars(select(InvoiceLine).where(InvoiceLine.invoice_id == inv.id,
+                                                      InvoiceLine.version == v.version)
+                            .order_by(InvoiceLine.line_no)))
+    return dto.DocumentLayoutOut(**doc_layout.layout(path, v, lines))
+
+
+@router.get("/{invoice_id}/document/pages/{page}", response_class=Response,
+            responses={200: {"content": {"image/png": {}, "image/jpeg": {}}}})
+def document_page(invoice_id: str, page: int, actor: User = Depends(get_actor),
+                  db: Session = Depends(get_db)) -> Response:
+    """One page of the original as an image, for the source-grounded viewer."""
+    _inv, path = _document_path(db, actor, invoice_id)
+    try:
+        content, media = doc_layout.render_page(path, page)
+    except IndexError:
+        raise NotFound("PAGE_NOT_FOUND", f"Page {page} does not exist.") from None
+    return Response(content, media_type=media, headers={"Cache-Control": "private, max-age=300"})
 
 
 @router.get("/{invoice_id}/flight-recorder", response_model=dto.FlightRecorderOut, tags=["audit"])

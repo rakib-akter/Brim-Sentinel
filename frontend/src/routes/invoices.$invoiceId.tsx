@@ -30,11 +30,11 @@ import { ApprovalDecision, InvoiceCorrections } from "@/components/sentinel/invo
 import { Evidence, FlightRecorder } from "@/components/sentinel/flight-recorder";
 import {
   CodingPanel,
-  DocumentPanel,
   ProgressRail,
   SentinelAnalysis,
 } from "@/components/sentinel/invoice-workspace";
 import { PaymentWorkflow } from "@/components/sentinel/payment-workflow";
+import { SourceReview } from "@/components/sentinel/source-review";
 import { Field, humanize, value, WorkflowForm } from "@/components/sentinel/workflow-form";
 import type { InvoiceDetail as InvoiceView } from "@/lib/domain/types";
 import type { InvoiceDetail as InvoiceRecord } from "@/lib/api/schema";
@@ -118,129 +118,126 @@ function InvoiceContent() {
     <div className="space-y-4">
       <ReviewHeader detail={data} />
       <ProgressRail record={record} />
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
-        <div className="xl:sticky xl:top-4">
-          <DocumentPanel
-            invoiceId={invoiceId}
-            fileName={data.invoice.fileName}
-            scanned={data.invoice.scanned}
-          />
-        </div>
-        <div className="min-w-0 space-y-6">
-          {/* 1 · Detect */}
-          <SentinelAnalysis
-            record={record}
-            findings={data.invoice.findings}
-            plainStatus={data.plainStatus}
-            actionLabel={action.label}
-            actionTarget={target}
-          />
-          <ExtractedDetails detail={data} />
-          <CodingPanel key={record.version} record={record} />
-          <ChecksPanel detail={data} />
+      <div className="min-w-0 space-y-6">
+        {/* 1 · Detect */}
+        <SentinelAnalysis
+          record={record}
+          findings={data.invoice.findings}
+          plainStatus={data.plainStatus}
+          actionLabel={action.label}
+          actionTarget={target}
+        />
+        <SourceReview
+          invoiceId={invoiceId}
+          record={record}
+          fileName={data.invoice.fileName}
+          scanned={data.invoice.scanned}
+        />
+        <ExtractedDetails detail={data} />
+        <CodingPanel key={record.version} record={record} />
+        <ChecksPanel detail={data} />
 
-          {/* 2 · Resolve */}
-          <section id="resolution" className="scroll-mt-4 space-y-3">
-            <StageHeading
-              n={2}
-              title="Resolve"
-              note="Issues Sentinel found and the safe way through them."
-            />
-            {data.invoice.findings.length === 0 && record.resolution_cases.length === 0 && (
-              <p className="surface px-5 py-4 text-sm text-muted-foreground">
-                Nothing to resolve. All blocking checks passed.
-              </p>
-            )}
-            {record.resolution_cases.map((item) => (
-              <ResolutionCase key={item.id} id={item.id} />
-            ))}
-            {data.invoice.findings.map((f) => (
-              <div key={f.id ?? f.code} className="space-y-2">
-                <FindingCard finding={f} refs={rawRefs(f.id)} />
-                {f.id &&
-                  record.allowed_actions.includes("dismiss_finding") &&
-                  record.validation_findings.some(
-                    (finding) => finding.id === f.id && finding.dismissible,
-                  ) && (
-                    <details className="surface px-5 py-4 text-sm">
-                      <summary className="cursor-pointer">Document dismissal</summary>
-                      <WorkflowForm
-                        label="Dismiss finding"
-                        run={(fields) =>
-                          api.dismiss(user.id, invoiceId, f.id!, {
-                            expected_version: record.version,
-                            reason: value(fields, "reason"),
-                          })
-                        }
-                      >
-                        <Field name="reason" label="Evidence-backed reason" />
-                      </WorkflowForm>
-                    </details>
-                  )}
-              </div>
-            ))}
-          </section>
-
-          {/* 3 · Settle */}
-          <section id="settle" className="scroll-mt-4 space-y-3">
-            <StageHeading
-              n={3}
-              title="Settle"
-              note="Approvals by the right people, then an independent simulated release."
-            />
-            <div id="approval" className="space-y-3">
-              <ApprovalPanel detail={data} />
-              {record.allowed_actions.some(
-                (action) => action === "approve" || action === "reject",
-              ) && (
-                <div className="surface px-5 py-4">
-                  <ApprovalDecision key={record.version} invoice={record} />
-                </div>
-              )}
+        {/* 2 · Resolve */}
+        <section id="resolution" className="scroll-mt-4 space-y-3">
+          <StageHeading
+            n={2}
+            title="Resolve"
+            note="Issues Sentinel found and the safe way through them."
+          />
+          {data.invoice.findings.length === 0 && record.resolution_cases.length === 0 && (
+            <p className="surface px-5 py-4 text-sm text-muted-foreground">
+              Nothing to resolve. All blocking checks passed.
+            </p>
+          )}
+          {record.resolution_cases.map((item) => (
+            <ResolutionCase key={item.id} id={item.id} />
+          ))}
+          {data.invoice.findings.map((f) => (
+            <div key={f.id ?? f.code} className="space-y-2">
+              <FindingCard finding={f} refs={rawRefs(f.id)} />
+              {f.id &&
+                record.allowed_actions.includes("dismiss_finding") &&
+                record.validation_findings.some(
+                  (finding) => finding.id === f.id && finding.dismissible,
+                ) && (
+                  <details className="surface px-5 py-4 text-sm">
+                    <summary className="cursor-pointer">Document dismissal</summary>
+                    <WorkflowForm
+                      label="Dismiss finding"
+                      run={(fields) =>
+                        api.dismiss(user.id, invoiceId, f.id!, {
+                          expected_version: record.version,
+                          reason: value(fields, "reason"),
+                        })
+                      }
+                    >
+                      <Field name="reason" label="Evidence-backed reason" />
+                    </WorkflowForm>
+                  </details>
+                )}
             </div>
-            <PaymentWorkflow invoice={record} />
-            <InvoiceCorrections key={record.version} invoice={record} />
-          </section>
+          ))}
+        </section>
 
-          {/* 4 · Explain */}
-          <section id="explain" className="scroll-mt-4 space-y-3">
-            <StageHeading
-              n={4}
-              title="Explain"
-              note="Every recorded step, who did it and the evidence behind it."
-            />
-            <FlightRecorder invoiceId={invoiceId} />
-            {record.vendor_id && (
-              <Link
-                className="inline-block text-sm font-medium text-primary hover:underline"
-                to="/vendors"
-                search={{ vendorId: record.vendor_id, q: "", status: "" }}
-              >
-                View supplier profile
-              </Link>
+        {/* 3 · Settle */}
+        <section id="settle" className="scroll-mt-4 space-y-3">
+          <StageHeading
+            n={3}
+            title="Settle"
+            note="Approvals by the right people, then an independent simulated release."
+          />
+          <div id="approval" className="space-y-3">
+            <ApprovalPanel detail={data} />
+            {record.allowed_actions.some(
+              (action) => action === "approve" || action === "reject",
+            ) && (
+              <div className="surface px-5 py-4">
+                <ApprovalDecision key={record.version} invoice={record} />
+              </div>
             )}
-            <details className="surface px-5 py-4 text-sm">
-              <summary className="cursor-pointer font-semibold">
-                Version history and supporting records
-              </summary>
-              <ul className="mt-2 space-y-2">
-                {record.versions.map((version) => (
-                  <li key={version.version}>
-                    Version {version.version} · {version.reason} · {version.created_by} ·{" "}
-                    {formatDate(version.created_at)}
-                  </li>
-                ))}
-                {record.duplicate_candidates.map((candidate) => (
-                  <li key={candidate.id}>
-                    {humanize(candidate.match_type)} ·{" "}
-                    {candidate.matched_card_txn_id ?? candidate.matched_invoice_id} ·{" "}
-                    {candidate.reasons.join(", ")}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          </section>
-        </div>
+          </div>
+          <PaymentWorkflow invoice={record} />
+          <InvoiceCorrections key={record.version} invoice={record} />
+        </section>
+
+        {/* 4 · Explain */}
+        <section id="explain" className="scroll-mt-4 space-y-3">
+          <StageHeading
+            n={4}
+            title="Explain"
+            note="Every recorded step, who did it and the evidence behind it."
+          />
+          <FlightRecorder invoiceId={invoiceId} />
+          {record.vendor_id && (
+            <Link
+              className="inline-block text-sm font-medium text-primary hover:underline"
+              to="/vendors"
+              search={{ vendorId: record.vendor_id, q: "", status: "" }}
+            >
+              View supplier profile
+            </Link>
+          )}
+          <details className="surface px-5 py-4 text-sm">
+            <summary className="cursor-pointer font-semibold">
+              Version history and supporting records
+            </summary>
+            <ul className="mt-2 space-y-2">
+              {record.versions.map((version) => (
+                <li key={version.version}>
+                  Version {version.version} · {version.reason} · {version.created_by} ·{" "}
+                  {formatDate(version.created_at)}
+                </li>
+              ))}
+              {record.duplicate_candidates.map((candidate) => (
+                <li key={candidate.id}>
+                  {humanize(candidate.match_type)} ·{" "}
+                  {candidate.matched_card_txn_id ?? candidate.matched_invoice_id} ·{" "}
+                  {candidate.reasons.join(", ")}
+                </li>
+              ))}
+            </ul>
+          </details>
+        </section>
       </div>
     </div>
   );
@@ -407,57 +404,16 @@ function Row({
 
 function ExtractedDetails({ detail }: { detail: InvoiceDetail }) {
   const inv = detail.invoice;
-  const unknown = <span className="text-warning-foreground">Needs a person</span>;
   const record = detail.record;
-  const uncertain = new Set(record.uncertain_fields);
-  const check = (present: boolean, ...keys: string[]): "ok" | "review" =>
-    present && !keys.some((k) => uncertain.has(k)) ? "ok" : "review";
-  const read = [inv.number, inv.issueDate, inv.subtotalMinor, inv.totalMinor].filter(
-    (v) => v !== null && v !== undefined,
-  ).length;
   return (
     <section className="surface rise-in px-5 py-4" aria-labelledby="extracted-heading">
       <h2 id="extracted-heading" className="text-sm font-semibold">
-        Extracted details
+        Record details
       </h2>
       <p className="text-xs text-muted-foreground">
-        {read} of 4 key fields read · ✓ means read from the document, ? means a person must confirm.
+        Where this invoice sits in Brim. What was read from the document is shown above.
       </p>
       <dl className="mt-2 divide-y">
-        <Row label="Supplier" check={check(!!inv.supplierName, "vendor", "vendor_name")}>
-          {inv.supplierName}
-        </Row>
-        <Row label="Invoice number" check={check(!!inv.number, "invoice_number")}>
-          {inv.number ? <span className="figure">{inv.number}</span> : unknown}
-        </Row>
-        <Row label="Issued" check={check(!!inv.issueDate, "invoice_date")}>
-          {inv.issueDate ? (
-            <span className="figure">
-              {formatDate(inv.issueDate, { year: "numeric", month: "short", day: "numeric" })}
-            </span>
-          ) : (
-            unknown
-          )}
-        </Row>
-        <Row label="Subtotal" check={check(inv.subtotalMinor !== null, "subtotal")}>
-          {inv.subtotalMinor === null ? (
-            unknown
-          ) : (
-            <Money minor={inv.subtotalMinor} currency={inv.currency} />
-          )}
-        </Row>
-        {inv.taxes.map((t) => (
-          <Row key={t.label} label={t.label}>
-            <Money minor={t.amountMinor} currency={inv.currency} showCode={false} />
-          </Row>
-        ))}
-        <Row label="Total" check={check(inv.totalMinor !== null, "total")}>
-          {inv.totalMinor === null ? (
-            unknown
-          ) : (
-            <Money minor={inv.totalMinor} currency={inv.currency} className="font-semibold" />
-          )}
-        </Row>
         <Row label="Department">{inv.department}</Row>
         <Row label="Version">{record.version}</Row>
         {record.remit["method"] != null && (
@@ -465,11 +421,6 @@ function ExtractedDetails({ detail }: { detail: InvoiceDetail }) {
             {String(record.remit["method"])} {String(record.remit["account_masked"] ?? "")}
           </Row>
         )}
-        {inv.poNumber ? (
-          <Row label="Purchase order">
-            <span className="figure">{inv.poNumber}</span>
-          </Row>
-        ) : null}
       </dl>
       <p className="mt-3 text-xs text-muted-foreground">
         Details {humanize(record.provenance)}
